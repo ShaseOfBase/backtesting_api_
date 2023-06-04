@@ -2,11 +2,10 @@ from dataclasses import dataclass
 from typing import Optional, List
 import numpy as np
 import json
-from base_config import BaseConfig
+from base_config import BaseConfig, valid_sources, valid_symbols, bad_operators, bad_aliases, arithmetic_operators, \
+    comparison_operators, flow_operators, valid_timeframes
 from indicators.indicator_library import indicator_library
-from json_parsing.string_library import valid_timeframes, bad_aliases, bad_operators
-from json_parsing.validate_sources import valid_sources
-from json_parsing.validate_symbols import valid_symbols
+import json
 
 
 #{
@@ -36,9 +35,8 @@ from json_parsing.validate_symbols import valid_symbols
 #					'window': 20
 #				  },],
 #	'parameter_merge': 'concat' # default concat, add the other one(s) at a later date
- #   'entries_t1': ['adx > 25 @4h', 'close < bbands.middle @1d'],
-#	'exits_t2': ['adx < adx_long @4h', 'close > bbands.upper * 1.03 @1d'],
-#	'exits_t3': ['adx < 16 @4h'],
+ #   'entry': 'adx > 25 @4h', 'close < bbands.middle @1d'],
+#	'exits': ['adx < adx_long @4h', 'close > bbands.upper * 1.03 @1d'],
 #	'cross_validation': 'rolling 3',
 #	'graph_analysis': true # <- error, graph_analysis requires scalar parameters only. see https://helper for details
 #}
@@ -48,12 +46,22 @@ from json_parsing.validate_symbols import valid_symbols
 
 
 @dataclass
-class RestIndicator:
+class TestingPeriod(json.JSONEncoder):
+    start: str
+    end: str
+    tz: str = 'UTC'
+
+    def to_json(self):
+        return json.dumps(self.__dict__)
+
+
+@dataclass
+class RestIndicator(json.JSONEncoder):
     alias: str
     indicator: str
     timeframe: str
-    window: Optional[int] | Optional[float] | Optional[list]
-    alpha: Optional[int] | Optional[float] | Optional[list]
+    window: Optional[int] | Optional[float] | Optional[list] = 0
+    alpha: Optional[int] | Optional[float] | Optional[list] = 0
 
     def to_json(self):
         return json.dumps(self.__dict__)
@@ -88,19 +96,19 @@ class RestIndicator:
 
 
 @dataclass
-class BtRequest:
-    source: str
+class BtRequest(json.JSONEncoder):
     symbols: list
-    timeframes: dict
+    testing_period: TestingPeriod
     indicators: List[RestIndicator]
-    parameter_merge: Optional[str]
     entry: str
     exit: str
-    sl_stop: Optional[str]
-    tp_stop: Optional[str]
-    tsl_stop: Optional[str]
-    cross_validation: Optional[str]
-    graph_analysis: Optional[bool]
+    sl_stop: Optional[str] = 0
+    tp_stop: Optional[str] = 0
+    tsl_stop: Optional[str] = 0
+    parameter_merge: Optional[str] = 'concat'
+    cross_validation: Optional[str] = 'none'
+    graph_analysis: Optional[bool] = False
+    source: str = 'binance'
     direction: str = 'long'  # 'short | long | both'
 
     def __post_init__(self):
@@ -139,10 +147,15 @@ class BtRequest:
         for word in (self.entry + self.exit).split(' '):
             if word in known_indicator_aliases:
                 raise ValueError(f'Invalid alias {word} in entry or exit conditions')
+            if word in arithmetic_operators or word in comparison_operators or word in flow_operators or \
+                    word.isnumeric() or word in indicator_library:
+                continue
+            else:
+                raise ValueError(f'Invalid word {word} in entry or exit conditions')
 
 
 @dataclass
-class IndicatorDataRequest:
+class IndicatorDataRequest(json.JSONEncoder):
     source: str
     symbols: list
     timeframes: dict

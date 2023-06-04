@@ -1,1 +1,0 @@
-valid_symbols = ['BTCUSDT', 'ETHUSDT']
