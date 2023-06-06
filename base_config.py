@@ -1,4 +1,4 @@
-
+from pathlib import Path
 
 valid_sources = {'binance'}
 valid_symbols = {'BTCUSDT', 'ETHUSDT'}
@@ -12,6 +12,7 @@ arithmetic_operators = {'+', '-', '*', '/', '%'}
 comparison_operators = {'<', '>', '==', '>=', '<=', '!=', '|>', '<|'}
 flow_operators = {'and', 'or', 'not', 'is', 'is not', '|', '&'}
 valid_timeframes = {'1m', '5m', '15m', '30m', '1h', '2h', '4h', '8h', '12h', '1d'}
+valid_timezones = {'UTC', 'Africa/Johannesburg'}
 
 
 class SubConfig:
@@ -24,6 +25,11 @@ class SubConfig:
 class BaseConfig:
     max_param_combinations = 1000
     max_entry_exit_len = 50
+    max_periods_in_testing_period = 1000
+
+    resource_paths = SubConfig(
+        local_data=Path('resources/data')
+    )
 
 
 

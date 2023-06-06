@@ -2,8 +2,12 @@ from dataclasses import dataclass
 from typing import Optional, List
 import numpy as np
 import json
+
+import pytz
+
 from base_config import BaseConfig, valid_sources, valid_symbols, bad_operators, bad_aliases, arithmetic_operators, \
     comparison_operators, flow_operators, valid_timeframes
+from engine.data.data_manager import get_periods_in_testing_period
 from indicators.indicator_library import indicator_library
 import json
 
@@ -49,10 +53,14 @@ import json
 class TestingPeriod(json.JSONEncoder):
     start: str
     end: str
-    tz: str = 'UTC'
+    tz: str = 'Africa/Johannesburg'
 
     def to_json(self):
         return json.dumps(self.__dict__)
+
+    def is_valid(self):
+        if self.tz not in pytz.all_timezones:
+            raise ValueError(f'Timezone {self.tz} not valid')
 
 
 @dataclass
@@ -160,6 +168,19 @@ class BtRequest(json.JSONEncoder):
                 continue
             else:
                 raise ValueError(f'Invalid word {word} in entry or exit conditions')
+
+        for timeframe in {indicator.timeframe for indicator in self.indicators}:
+            periods_in_testing_period = get_periods_in_testing_period(testing_period=self.testing_period,
+                                                                      timeframe=timeframe)
+            if periods_in_testing_period > BaseConfig.max_periods_in_testing_period:
+                raise ValueError(f'Testing period exceeds max periods in testing period of '
+                                 f'{BaseConfig.max_periods_in_testing_period} for timeframe {timeframe}')
+
+
+
+
+
+
 
 
 @dataclass
