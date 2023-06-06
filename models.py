@@ -98,8 +98,8 @@ class RestIndicator(json.JSONEncoder):
 @dataclass
 class BtRequest(json.JSONEncoder):
     symbols: list
-    testing_period: TestingPeriod
-    indicators: List[RestIndicator]
+    testing_period: TestingPeriod | dict
+    indicators: List[RestIndicator] | List[dict]
     entry: str
     exit: str
     sl_stop: Optional[str] = 0
@@ -125,7 +125,15 @@ class BtRequest(json.JSONEncoder):
         return f'BtRequest: {self.__dict__}'
 
     def to_json(self):
-        return json.dumps(self.__dict__)
+        indicator_dicts = []
+        for indicator in self.indicators:
+            indicator_dicts.append(indicator.__dict__)
+
+        self.indicators = indicator_dicts
+        self.testing_period = self.testing_period.__dict__
+
+        result = json.dumps(self.__dict__)
+        return result
 
     def validate(self):
         if not self.entry or not self.exit:
