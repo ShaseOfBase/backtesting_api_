@@ -9,8 +9,8 @@ def test_bt_request():
     from main import app
     client = TestClient(app)
 
-    tp = TestingPeriod(start='2023-01-01',
-                       end='2023-04-01')
+    tp = TestingPeriod(start='2023-01-01 00:00',
+                       end='2023-02-01 00:00')
 
     ri = RestIndicator(alias='slow_ma',
                        indicator='ma',
@@ -21,36 +21,6 @@ def test_bt_request():
                            indicators=[ri, ri],
                            entry='close > slow_ma',
                            exit='close < slow_ma')
-
-    data = {
-        "symbols": [
-            "string"
-        ],
-        "testing_period": {
-            "start": "asdasd",
-            "end": "asdasd",
-            "tz": "UTC"
-        },
-        "indicators": [
-            {
-                "alias": "string",
-                "indicator": "string",
-                "timeframe": "string",
-                "window": 0,
-                "alpha": 0
-            }
-        ],
-        "entry": "string",
-        "exit": "string",
-        "sl_stop": "0",
-        "tp_stop": "0",
-        "tsl_stop": "0",
-        "parameter_merge": "concat",
-        "cross_validation": "none",
-        "graph_analysis": False,
-        "source": "binance",
-        "direction": "long"
-    }
 
     response = client.post("/bt", data=bt_request.to_json())
     assert response.status_code == 200

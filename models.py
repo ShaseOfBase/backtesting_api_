@@ -1,13 +1,10 @@
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Optional, List
-import numpy as np
-import json
-
 import pytz
-
 from base_config import BaseConfig, valid_sources, valid_symbols, bad_operators, bad_aliases, arithmetic_operators, \
     comparison_operators, flow_operators, valid_timeframes
-from engine.data.data_manager import get_periods_in_testing_period
+from engine.utils import get_periods_in_testing_period
 from indicators.indicator_library import indicator_library
 import json
 
@@ -59,6 +56,13 @@ class TestingPeriod(json.JSONEncoder):
         return json.dumps(self.__dict__)
 
     def is_valid(self):
+        # check start and end dates are of the right format
+        try:
+            datetime.strptime(self.start, '%Y-%m-%d %H:%M')
+            datetime.strptime(self.end, '%Y-%m-%d %H:%M')
+        except ValueError:
+            raise ValueError(f'Incorrect data format, should be YYYY-MM-DD HH:MM')
+
         if self.tz not in pytz.all_timezones:
             raise ValueError(f'Timezone {self.tz} not valid')
 
@@ -113,6 +117,8 @@ class BtRequest(json.JSONEncoder):
     sl_stop: Optional[str] = 0
     tp_stop: Optional[str] = 0
     tsl_stop: Optional[str] = 0
+    fee: Optional[float] = 0.0
+    slippage: Optional[float] = 0.0
     parameter_merge: Optional[str] = 'concat'
     cross_validation: Optional[str] = 'none'
     graph_analysis: Optional[bool] = False
@@ -175,13 +181,6 @@ class BtRequest(json.JSONEncoder):
             if periods_in_testing_period > BaseConfig.max_periods_in_testing_period:
                 raise ValueError(f'Testing period exceeds max periods in testing period of '
                                  f'{BaseConfig.max_periods_in_testing_period} for timeframe {timeframe}')
-
-
-
-
-
-
-
 
 @dataclass
 class IndicatorDataRequest(json.JSONEncoder):

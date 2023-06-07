@@ -1,3 +1,4 @@
+from engine.process_requests import process_bt_request
 from indicators.indicator_data import get_indicator_data
 from main import app
 import pandas as pd
@@ -11,8 +12,7 @@ async def root():
 
 @app.post("/bt")
 async def say_hello(bt_request: BtRequest):
-    index = pd.DatetimeIndex(['2021-01-01', '2021-01-02', '2021-01-03'])
-    df = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}, index=index)
+    process_bt_request(bt_request)
 
     return {"message": f"Hello world"}
 
