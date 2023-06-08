@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, List
+
+import pandas as pd
 import pytz
 from base_config import BaseConfig, valid_sources, valid_symbols, bad_operators, bad_aliases, arithmetic_operators, \
     comparison_operators, flow_operators, valid_timeframes
@@ -72,6 +74,7 @@ class RestIndicator(json.JSONEncoder):
     alias: str
     indicator: str
     timeframe: str
+    data: pd.Series = None
     window: Optional[int] | Optional[float] | Optional[list] = 0
     alpha: Optional[int] | Optional[float] | Optional[list] = 0
 
@@ -98,9 +101,6 @@ class RestIndicator(json.JSONEncoder):
         if self.timeframe not in valid_timeframes:
             raise ValueError(f'Timeframe {self.timeframe} not in valid timeframes')
 
-        # Check window is valid
-        # todo
-
         # Check alpha is valid
         # todo
 
@@ -125,7 +125,7 @@ class BtRequest(json.JSONEncoder):
     source: str = 'binance'
     direction: str = 'long'  # 'short | long | both'
 
-    def __post_init__(self):
+    def is_valid(self):
         if self.source not in valid_sources:
             raise ValueError(f'Invalid source {self.source}, must be one of {valid_sources}')
 
@@ -134,6 +134,9 @@ class BtRequest(json.JSONEncoder):
 
         if not self.exit:
             raise ValueError('At least one exit condition must be specified')
+
+        if len(self.indicators) > BaseConfig.max_indicators:
+            raise ValueError(f'Too many indicators, max {BaseConfig.max_indicators}')
 
     def __repr__(self):
         return f'BtRequest: {self.__dict__}'

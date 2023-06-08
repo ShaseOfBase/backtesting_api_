@@ -43,6 +43,9 @@ def get_merged_data(testing_period, timeframe, symbols, source='binance'):  # to
             file_start = datetime.strptime(start_str, '%Y-%m-%d %H-%M-%S')
             file_end = datetime.strptime(end_str, '%Y-%m-%d %H-%M-%S')
 
+            if file_start > testing_period_end or file_end < testing_period_start:
+                continue
+
             file_range = pd.date_range(start=file_start, end=file_end, freq=pd_timeframe)
 
             file_needed = False
@@ -94,4 +97,4 @@ def fetch_datas(source, symbols, timeframes: list, testing_period: TestingPeriod
                                source=source)
         datas[timeframe] = data
 
-    return data
+    return datas

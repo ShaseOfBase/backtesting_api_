@@ -14,11 +14,17 @@ def test_bt_request():
 
     ri = RestIndicator(alias='slow_ma',
                        indicator='ma',
-                       timeframe='1d')
+                       timeframe='1d',
+                       window=20)
+
+    rib = RestIndicator(alias='fast_ma',
+                       indicator='ma',
+                       timeframe='1d',
+                        window=10)
 
     bt_request = BtRequest(symbols=['BTCUSDT', 'ETHUSDT'],
                            testing_period=tp,
-                           indicators=[ri, ri],
+                           indicators=[ri, rib],
                            entry='close > slow_ma',
                            exit='close < slow_ma')
 

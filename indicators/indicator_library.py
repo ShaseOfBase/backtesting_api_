@@ -3,11 +3,17 @@ import vectorbtpro as vbt
 
 indicator_library = {
     'adx': {'indicator': vbt.IF.get_indicator('talib:ADX'),
-            'result_param': 'real'},
+            'result_param': 'real',
+            'data_kwargs': ['high', 'low', 'close'],  # todo continue...
+            'param_kwargs': {'timeperiod': 14}},
     'bbands.lower': {'indicator': vbt.IF.get_indicator('vbt:BBANDS'),
-                        'result_param': 'lower'},
+                        'result_param': 'lower',
+                     'data_kwargs': ['close'],
+                     'param_kwargs': {'alpha': 2, 'window': 20}},
     'bbands.middle': {'indicator': vbt.IF.get_indicator('vbt:BBANDS'),
-                        'result_param': 'middle'},
+                        'result_param': 'middle',
+                      'data_kwargs': ['close'],
+                      },
     'bbands.upper': {'indicator': vbt.IF.get_indicator('vbt:BBANDS'),
                         'result_param': 'upper'},
     'bbands.bandwidth': {'indicator': vbt.IF.get_indicator('vbt:BBANDS'),
@@ -30,10 +36,13 @@ indicator_library = {
             'result_param': 'real'},
     'atr': {'indicator': vbt.IF.get_indicator('talib:ATR'),
             'result_param': 'real'},
+    'ma': {'indicator': vbt.IF.get_indicator('vbt:MA'),
+            'result_param': 'ma'},
     }
 
 
-def get_indicator_data():
+def get_indicator_kwargs(indicator: str, data):
+    if indicator == ''
     ...
 
 
