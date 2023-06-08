@@ -9,8 +9,8 @@ def test_bt_request():
     from main import app
     client = TestClient(app)
 
-    tp = TestingPeriod(start='2023-01-01 00:00',
-                       end='2023-02-01 00:00')
+    tp = TestingPeriod(start='2023-01-15 00:00',
+                       end='2023-01-29 00:00')
 
     ri = RestIndicator(alias='slow_ma',
                        indicator='ma',
