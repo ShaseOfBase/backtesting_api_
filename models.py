@@ -32,9 +32,10 @@ import json
 #					'indicator': 'ma',
 #					'window': [12, 15, 18]
 #				  },
-#				  {'alias': 'ma_fast_daily',
+#				  {'alias': 'bbands',
 #                   'timeframe': '1d',
-#					'indicator': 'ma',
+#					'indicator': 'bbands',
+#                   'values': [lower, middle, upper, bandwidth],
 #					'window': 20
 #				  },],
 #	'parameter_merge': 'concat' # default concat, add the other one(s) at a later date
