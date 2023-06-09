@@ -64,18 +64,24 @@ def get_merged_data(testing_period, timeframe, symbols, source='binance'):  # to
 
         if len(periods_still_needed):
             end_period = periods_still_needed[-1] + pd.Timedelta(pd_timeframe)
-            data = vbt.BinanceData.fetch(symbols=symbols,
-                                         start=periods_still_needed[0],
-                                         end=end_period,
-                                         timeframe=timeframe,
-                                         execute_kwargs={'engine': 'threadpool'})
-            filename = f'{periods_still_needed[0]}_{periods_still_needed[-1]}'.replace(':', '-')
-            full_file_path = symbol_timeframe_data_folder / filename
-            if not os.path.exists(symbol_timeframe_data_folder):
-                full_file_path.mkdir(parents=True)
+            total_period = pd.date_range(start=periods_still_needed[0], end=end_period, freq=pd_timeframe)
 
-            data.save(full_file_path)
-            required_files.add(full_file_path)
+            period_chunks = [total_period[i:i + BaseConfig.data_batch_len] for i in range(0, len(total_period),
+                                                                                          BaseConfig.data_batch_len)]
+
+            for period_chunk in period_chunks:
+                data = vbt.BinanceData.fetch(symbols=symbols,
+                                             start=period_chunk[0],
+                                             end=period_chunk[-1],
+                                             timeframe=timeframe,
+                                             execute_kwargs={'engine': 'threadpool'})
+                filename = f'{periods_still_needed[0]}_{periods_still_needed[-1]}'.replace(':', '-')
+                full_file_path = symbol_timeframe_data_folder / filename
+                if not os.path.exists(symbol_timeframe_data_folder):
+                    full_file_path.mkdir(parents=True)
+
+                data.save(full_file_path)
+                required_files.add(full_file_path)
 
     data_pieces = []
     for full_file_path in required_files:

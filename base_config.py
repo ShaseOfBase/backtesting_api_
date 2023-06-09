@@ -27,6 +27,7 @@ class BaseConfig:
     max_entry_exit_len = 50
     max_periods_in_testing_period = 1000
     max_indicators = 10
+    data_batch_len = 200
 
     resources = SubConfig(
         local_data=Path('resources/local_data')

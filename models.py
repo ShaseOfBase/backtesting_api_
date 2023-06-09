@@ -7,7 +7,7 @@ import pytz
 from base_config import BaseConfig, valid_sources, valid_symbols, bad_operators, bad_aliases, arithmetic_operators, \
     comparison_operators, flow_operators, valid_timeframes
 from engine.utils import get_periods_in_testing_period
-from indicators.indicator_library import indicator_library
+from indicators.indicator_library import indicator_library, get_indicator_key_value
 import json
 
 
@@ -75,9 +75,7 @@ class RestIndicator(json.JSONEncoder):
     alias: str
     indicator: str
     timeframe: str
-    data: pd.Series = None
-    window: Optional[int] | Optional[float] | Optional[list] = 0
-    alpha: Optional[int] | Optional[float] | Optional[list] = 0
+    run_kwargs: Optional[dict] = None
 
     def to_json(self):
         return json.dumps(self.__dict__)
@@ -102,8 +100,22 @@ class RestIndicator(json.JSONEncoder):
         if self.timeframe not in valid_timeframes:
             raise ValueError(f'Timeframe {self.timeframe} not in valid timeframes')
 
-        # Check alpha is valid
-        # todo
+        if self.run_kwargs:
+            if not isinstance(self.run_kwargs, dict):
+                raise ValueError(f'run_values must be a dictionary')
+
+            if not all(isinstance(value, (int, float)) for key, value in self.run_kwargs.items()):
+                raise ValueError(f'run_kwargs value must be an int or float')
+
+            avlbl_run_kwargs = get_indicator_key_value(self.indicator, 'run_kwargs')
+            avlbl_run_keys = avlbl_run_kwargs.keys()
+
+            for key, value in self.run_kwargs.items():
+                if key not in avlbl_run_keys:
+                    raise ValueError(f'run_kwargs key {key} not in available keys {avlbl_run_keys}')
+
+                if len(self.run_kwargs[key]) > 3:
+                    raise ValueError(f'run_kwargs value must be a list of length 3 or less')
 
         return True
 

@@ -10,23 +10,23 @@ def test_bt_request():
     client = TestClient(app)
 
     tp = TestingPeriod(start='2023-01-15 00:00',
-                       end='2023-01-29 00:00')
+                       end='2023-04-01 00:00')
 
-    ri = RestIndicator(alias='slow_ma',
-                       indicator='ma',
-                       timeframe='1d',
-                       window=20)
+    ri_ma = RestIndicator(alias='slow_ma',
+                          indicator='ma',
+                          timeframe='1d',
+                          run_kwargs=dict(window=20))
 
-    rib = RestIndicator(alias='fast_ma',
-                       indicator='ma',
-                       timeframe='1d',
-                        window=10)
+    ri_macd = RestIndicator(alias='fast_macd',
+                            indicator='macd',  # possible values are hist, macd, signal
+                            timeframe='4h',
+                            )
 
     bt_request = BtRequest(symbols=['BTCUSDT', 'ETHUSDT'],
                            testing_period=tp,
-                           indicators=[ri, rib],
-                           entry='close > slow_ma',
-                           exit='close < slow_ma')
+                           indicators=[ri_ma, ri_macd],
+                           entry='fast_macd.hist > 0',
+                           exit='fast_macd.hist < 0')
 
     response = client.post("/bt", data=bt_request.to_json())
     assert response.status_code == 200
