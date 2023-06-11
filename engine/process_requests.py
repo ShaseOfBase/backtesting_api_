@@ -1,5 +1,6 @@
 from collections import defaultdict
-
+import vectorbtpro as vbt
+from backtesting.decorators import std_parameterized
 from engine.data.data_manager import fetch_datas
 from indicators.indicator_library import indicator_library, get_indicator_key_value, get_indicator_run_results
 from models import BtRequest
@@ -13,7 +14,8 @@ def get_timeframed_run_results(timeframed_data, rest_indicators):
                 continue
 
             if rest_indicator.run_kwargs:
-                run_results = get_indicator_run_results(rest_indicator.indicator, data, run_kwargs=rest_indicator.run_kwargs)
+                run_results = get_indicator_run_results(rest_indicator.indicator, data,
+                                                        run_kwargs=rest_indicator.run_kwargs)
             else:
                 run_results = get_indicator_run_results(rest_indicator.indicator, data)
 
@@ -28,6 +30,28 @@ def process_bt_request(bt_request: BtRequest):
                                   timeframes=[indicator.timeframe for indicator in bt_request.indicators],
                                   testing_period=bt_request.testing_period)
 
+    #1. Create dict of all kwargs to be used in the sim in vbt params,
+    # thats the run_kwargs from each rest_indicator and the custom_ranges from bt_request
+    #
+
+    run_kwargs = {}
+
+    for rest_indicator in bt_request.indicators:
+        if rest_indicator.run_kwargs:
+            for key, value in rest_indicator.run_kwargs.items():
+                run_kwargs[f'{rest_indicator.alias}_{key}'] = vbt.Param(value)
+
+    if bt_request.custom_ranges:
+        for key, value in bt_request.custom_ranges.items():
+            run_kwargs[f'custom_{key}'] = vbt.Param(value)
+
+
+
     timeframed_run_results = get_timeframed_run_results(timeframed_data, bt_request.indicators)
 
     print(1)
+
+
+@std_parameterized
+def get_parameterized_pf():
+    ...

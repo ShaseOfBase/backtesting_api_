@@ -125,6 +125,7 @@ class BtRequest(json.JSONEncoder):
     symbols: list
     testing_period: TestingPeriod | dict
     indicators: List[RestIndicator] | List[dict]
+    custom_ranges: Optional[dict]
     entry: str
     exit: str
     sl_stop: Optional[str] = 0

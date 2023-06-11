@@ -15,7 +15,7 @@ def test_bt_request():
     ri_ma = RestIndicator(alias='slow_ma',
                           indicator='ma',
                           timeframe='1d',
-                          run_kwargs=dict(window=20))
+                          run_kwargs=dict(window=[20, 30, 40]))
 
     ri_macd = RestIndicator(alias='fast_macd',
                             indicator='macd',  # possible values are hist, macd, signal
@@ -25,7 +25,8 @@ def test_bt_request():
     bt_request = BtRequest(symbols=['BTCUSDT', 'ETHUSDT'],
                            testing_period=tp,
                            indicators=[ri_ma, ri_macd],
-                           entry='fast_macd.hist > 0',
+                           custom_ranges=dict(macd_hist_long=[0, 1, 2]),
+                           entry='fast_macd.hist > macd_hist_long',
                            exit='fast_macd.hist < 0')
 
     response = client.post("/bt", data=bt_request.to_json())

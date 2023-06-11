@@ -52,6 +52,8 @@ indicator_library = {
 def get_indicator_key_value(indicator: str, key_value: str):
     '''Returns the value of the key_value for the indicator,
     key_value options are 'vbt_indicator', 'default_value', 'avlbl_values', 'data_run_kwargs', 'run_kwargs'''
+    if key_value not in indicator_library[indicator]:
+        raise ValueError(f'key_value must be one of {list(indicator_library[indicator].keys())}')
     return indicator_library[indicator].get(key_value)
 
 
