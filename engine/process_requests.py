@@ -41,22 +41,53 @@ def process_bt_request(bt_request: BtRequest):
     for rest_indicator in bt_request.indicators:
         if rest_indicator.run_kwargs:
             for key, value in rest_indicator.run_kwargs.items():
-                run_kwargs[f'{rest_indicator.alias}_{key}'] = vbt.Param(value)
+                run_kwargs[f'{rest_indicator.alias}__{key}'] = vbt.Param(value)
 
     if bt_request.custom_ranges:
         for key, value in bt_request.custom_ranges.items():
             run_kwargs[key] = vbt.Param(value)
 
-    r = get_parameterized_pf(timeframed_data, **run_kwargs)
+    if bt_request.sl_stop:
+        run_kwargs['sl_stop'] = vbt.Param(bt_request.sl_stop)
+
+    if bt_request.tp_stop:
+        run_kwargs['tp_stop'] = vbt.Param(bt_request.tp_stop)
+
+    if bt_request.tsl_stop:
+        run_kwargs['tsl_stop'] = vbt.Param(bt_request.tsl_stop)
+
+    if bt_request.fee:
+        run_kwargs['fee'] = vbt.Param(bt_request.fee)
+
+    if bt_request.slippage:
+        run_kwargs['slippage'] = vbt.Param(bt_request.slippage)
+
+    r = get_parameterized_pf(timeframed_data, bt_request=bt_request, **run_kwargs)
 
     print(1)
 
+
+def set_rest_indicator_live_run_kwargs(bt_request, kwargs):
+    for rest_indicator in bt_request.indicators:
+        if not rest_indicator.run_kwargs:
+            continue
+
+        rest_indicator_live_run_kwargs = {}
+        for key in kwargs:
+            if key.startswith(rest_indicator.alias):
+                rest_indicator_live_run_kwargs[key.split('__')[1]] = kwargs[key]
+
+        rest_indicator.run_kwargs = rest_indicator_live_run_kwargs
 
 @std_parameterized
-def get_parameterized_pf(timeframed_data, **kwargs):
-    for key, value in kwargs.items():
-        print(key, value)
-    print(1)
+def get_parameterized_pf(timeframed_data, bt_request, **kwargs):
+
+    set_rest_indicator_live_run_kwargs(bt_request, kwargs)
+    timeframed_run_results = get_timeframed_run_results(timeframed_data, bt_request.indicators)
+
+    # todo - get entries and exits based on entry and exit strings
+    # todo - get fee, slippage and stops from kwargs else default
+    # todo - delete stops that are 0 or negative from new pf run_kwargs - still to be built
 
     return np.random.randint(4)
-    #timeframed_run_results = get_timeframed_run_results(timeframed_data, bt_request.indicators)
+    #

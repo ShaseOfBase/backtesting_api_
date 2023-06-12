@@ -87,6 +87,9 @@ class RestIndicator(json.JSONEncoder):
         if not self.alias.isalnum():
             raise ValueError(f'Alias {self.alias} must be alphanumeric')
 
+        if '__' in self.alias:
+            raise ValueError(f'Alias {self.alias} cannot contain double underscores')
+
         if len(self.alias) < 3:
             raise ValueError(f'Alias {self.alias} must be at least 3 characters')
 
@@ -131,8 +134,8 @@ class BtRequest(json.JSONEncoder):
     sl_stop: Optional[str] = 0
     tp_stop: Optional[str] = 0
     tsl_stop: Optional[str] = 0
-    fee: Optional[float] = 0.0
-    slippage: Optional[float] = 0.0
+    fee: Optional[str] = 0.0
+    slippage: Optional[str] = 0.0
     parameter_merge: Optional[str] = 'concat'
     cross_validation: Optional[str] = 'none'
     graph_analysis: Optional[bool] = False
