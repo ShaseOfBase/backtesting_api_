@@ -1,4 +1,6 @@
 from collections import defaultdict
+
+import numpy as np
 import vectorbtpro as vbt
 from backtesting.decorators import std_parameterized
 from engine.data.data_manager import fetch_datas
@@ -43,15 +45,18 @@ def process_bt_request(bt_request: BtRequest):
 
     if bt_request.custom_ranges:
         for key, value in bt_request.custom_ranges.items():
-            run_kwargs[f'custom_{key}'] = vbt.Param(value)
+            run_kwargs[key] = vbt.Param(value)
 
-
-
-    timeframed_run_results = get_timeframed_run_results(timeframed_data, bt_request.indicators)
+    r = get_parameterized_pf(timeframed_data, **run_kwargs)
 
     print(1)
 
 
 @std_parameterized
-def get_parameterized_pf():
-    ...
+def get_parameterized_pf(timeframed_data, **kwargs):
+    for key, value in kwargs.items():
+        print(key, value)
+    print(1)
+
+    return np.random.randint(4)
+    #timeframed_run_results = get_timeframed_run_results(timeframed_data, bt_request.indicators)
