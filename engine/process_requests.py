@@ -85,7 +85,27 @@ def get_parameterized_pf(timeframed_data, bt_request, **kwargs):
     set_rest_indicator_live_run_kwargs(bt_request, kwargs)
     timeframed_run_results = get_timeframed_run_results(timeframed_data, bt_request.indicators)
 
-    # todo - get entries and exits based on entry and exit strings
+    indicator_run_results = {}
+    for timeframe, indicator_results in timeframed_run_results.items():
+        for indicator_alias, run_results in indicator_results.items():
+            for run_value, run_result in run_results.items():
+                indicator_run_results[f'{indicator_alias}.{run_value}'] = run_result
+
+    for key, value in kwargs.items():
+        bt_request.entry = bt_request.entry.replace(key, str(value))
+        bt_request.exit = bt_request.exit.replace(key, str(value))
+
+    for word in bt_request.entry.split():
+        if word in indicator_run_results:
+            bt_request.entry = bt_request.entry.replace(word, f'indicator_run_results["{word}"]')
+
+    for word in bt_request.exit.split():
+        if word in indicator_run_results:
+            bt_request.exit = bt_request.exit.replace(word, f'indicator_run_results["{word}"]')
+
+    entries = eval(bt_request.entry)
+    exits = eval(bt_request.exit)
+
     # todo - get fee, slippage and stops from kwargs else default
     # todo - delete stops that are 0 or negative from new pf run_kwargs - still to be built
 
