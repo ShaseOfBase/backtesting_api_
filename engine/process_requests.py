@@ -79,11 +79,31 @@ def set_rest_indicator_live_run_kwargs(bt_request, kwargs):
 
         rest_indicator.run_kwargs = rest_indicator_live_run_kwargs
 
+
+def handle_crossed_operator(operator_string):
+    split_string = operator_string.split()
+    for i, word in enumerate(split_string):
+        if word == '|>':
+            split_string[i - 1] = split_string[i - 1] + f'.vbt.crossed_above({split_string[i + 1]})'
+            split_string[i] = ''
+            split_string[i + 1] = ''
+
+        elif word == '<|':
+            split_string[i - 1] = split_string[i - 1] + f'.vbt.crossed_below({split_string[i + 1]})'
+            split_string[i] = ''
+            split_string[i + 1] = ''
+
+    return ' '.join(split_string)
+
 @std_parameterized
 def get_parameterized_pf(timeframed_data, bt_request, **kwargs):
 
     set_rest_indicator_live_run_kwargs(bt_request, kwargs)
     timeframed_run_results = get_timeframed_run_results(timeframed_data, bt_request.indicators)
+
+    for key, value in kwargs.items():
+        bt_request.entries = bt_request.entries.replace(key, str(value))
+        bt_request.exits = bt_request.exits.replace(key, str(value))
 
     indicator_run_results = {}
     for timeframe, indicator_results in timeframed_run_results.items():
@@ -91,21 +111,23 @@ def get_parameterized_pf(timeframed_data, bt_request, **kwargs):
             for run_value, run_result in run_results.items():
                 indicator_run_results[f'{indicator_alias}.{run_value}'] = run_result
 
-    for key, value in kwargs.items():
-        bt_request.entry = bt_request.entry.replace(key, str(value))
-        bt_request.exit = bt_request.exit.replace(key, str(value))
-
-    for word in bt_request.entry.split():
+    for word in bt_request.entries.split():
         if word in indicator_run_results:
-            bt_request.entry = bt_request.entry.replace(word, f'indicator_run_results["{word}"]')
+            bt_request.entries = bt_request.entries.replace(word, f'indicator_run_results["{word}"]')
 
-    for word in bt_request.exit.split():
+    for word in bt_request.exits.split():
         if word in indicator_run_results:
-            bt_request.exit = bt_request.exit.replace(word, f'indicator_run_results["{word}"]')
+            bt_request.exits = bt_request.exits.replace(word, f'indicator_run_results["{word}"]')
 
-    entries = eval(bt_request.entry)
-    exits = eval(bt_request.exit)
+    bt_request.entries = handle_crossed_operator(bt_request.entries)
+    bt_request.exits = handle_crossed_operator(bt_request.exits)
 
+    entries = eval(bt_request.entries)
+    exits = eval(bt_request.exits)
+
+
+    if BtRequest.test_var == 'sharpe_ratio':
+        return 1
     # todo - get fee, slippage and stops from kwargs else default
     # todo - delete stops that are 0 or negative from new pf run_kwargs - still to be built
 

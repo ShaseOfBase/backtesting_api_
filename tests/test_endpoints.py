@@ -26,8 +26,8 @@ def test_bt_request():
                            testing_period=tp,
                            indicators=[ri_ma, ri_macd],
                            custom_ranges=dict(macd_hist_long=[0, 1, 2]),
-                           entry='fast_macd.hist > macd_hist_long',
-                           exit='fast_macd.hist < 0')
+                           entries='fast_macd.hist |> macd_hist_long',
+                           exits='fast_macd.hist < 0')
 
     response = client.post("/bt", data=bt_request.to_json())
     assert response.status_code == 200

@@ -129,27 +129,29 @@ class BtRequest(json.JSONEncoder):
     testing_period: TestingPeriod | dict
     indicators: List[RestIndicator] | List[dict]
     custom_ranges: Optional[dict]
-    entry: str
-    exit: str
-    sl_stop: Optional[str] = 0
-    tp_stop: Optional[str] = 0
-    tsl_stop: Optional[str] = 0
-    fee: Optional[str] = 0.0
-    slippage: Optional[str] = 0.0
+    entries: str
+    exits: str
+    test_var: Optional[str] = 'sharpe_ratio'
+    sl_stop: Optional[str] = '0.0'
+    tp_stop: Optional[str] = '0.0'
+    tsl_stop: Optional[str] = '0.0'
+    fee: Optional[str] = '0.0'
+    slippage: Optional[str] = '0.0'
     parameter_merge: Optional[str] = 'concat'
     cross_validation: Optional[str] = 'none'
     graph_analysis: Optional[bool] = False
     source: str = 'binance'
-    direction: str = 'long'  # 'short | long | both'
+    direction: str = 'long' # 'short | long | both'
+    get_signal: bool = False
 
     def is_valid(self):
         if self.source not in valid_sources:
             raise ValueError(f'Invalid source {self.source}, must be one of {valid_sources}')
 
-        if not self.entry:
+        if not self.entries:
             raise ValueError('At least one entry condition must be specified')
 
-        if not self.exit:
+        if not self.exits:
             raise ValueError('At least one exit condition must be specified')
 
         if len(self.indicators) > BaseConfig.max_indicators:
@@ -170,7 +172,7 @@ class BtRequest(json.JSONEncoder):
         return result
 
     def validate(self):
-        if not self.entry or not self.exit:
+        if not self.entries or not self.exits:
             raise ValueError('At least one entry and one exit condition must be specified')
 
         known_indicator_aliases = set()
@@ -179,14 +181,14 @@ class BtRequest(json.JSONEncoder):
                 raise ValueError(f'Invalid alias {indicator["alias"]} in indicators')
             known_indicator_aliases.add(indicator['alias'])
 
-        if len(self.entry) > BaseConfig.max_entry_exit_len or len(self.exit) > BaseConfig.max_entry_exit_len:
+        if len(self.entries) > BaseConfig.max_entry_exit_len or len(self.exits) > BaseConfig.max_entry_exit_len:
             raise ValueError(f'Entry or exit conditions exceed max length of {BaseConfig.max_entry_exit_len}')
 
         for bad_operator in bad_operators:
-            if bad_operator in self.entry or bad_operator in self.exit:
+            if bad_operator in self.entries or bad_operator in self.exits:
                 raise ValueError(f'Invalid operator {bad_operator} in entry or exit conditions')
 
-        for word in (self.entry + self.exit).split(' '):
+        for word in (self.entries + self.exits).split(' '):
             if word in known_indicator_aliases:
                 raise ValueError(f'Invalid alias {word} in entry or exit conditions')
             if word in arithmetic_operators or word in comparison_operators or word in flow_operators or \
