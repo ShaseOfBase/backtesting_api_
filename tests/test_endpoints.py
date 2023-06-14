@@ -15,7 +15,7 @@ def test_bt_request():
     ri_ma = RestIndicator(alias='slow_ma',
                           indicator='ma',
                           timeframe='1d',
-                          run_kwargs=dict(window=[20, 30, 40]))
+                          run_kwargs=dict(window=[20, 30, 40, 50]))
 
     ri_macd = RestIndicator(alias='fast_macd',
                             indicator='macd',  # possible values are hist, macd, signal
