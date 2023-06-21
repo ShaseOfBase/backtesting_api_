@@ -20,6 +20,35 @@ def convert_std_timeframe_to_pandas_timeframe(timeframe: str):
     return timeframe
 
 
+def get_minutes_from_timeframe(timeframe: str):
+    ''' Get the number of minutes from a timeframe '''
+    timeframe = timeframe.lower()
+    if 'm' in timeframe:
+        return int(timeframe.replace('m', ''))
+    elif 'h' in timeframe:
+        return int(timeframe.replace('h', '')) * 60
+    elif 'd' in timeframe:
+        return int(timeframe.replace('d', '')) * 60 * 24
+
+
+def get_fastest_timeframe_data(timeframed_data: dict):
+    """ Get the fastest timeframe data from a dict of timeframed data """
+    fastest_timeframe_mins = 0
+    fastest_timeframe = None
+    for timeframe in timeframed_data:
+        if not fastest_timeframe:
+            fastest_timeframe_mins = get_minutes_from_timeframe(timeframe)
+            fastest_timeframe = timeframe
+            continue
+
+        timeframe_minutes = get_minutes_from_timeframe(timeframe)
+        if timeframe_minutes < fastest_timeframe_mins:
+            fastest_timeframe_mins = timeframe_minutes
+            fastest_timeframe = timeframe
+
+    return timeframed_data[fastest_timeframe]
+
+
 def get_merged_data(testing_period, timeframe, symbols, source='binance'):  # todo customize for sources & different tzs
     base_local_data_folder = BaseConfig.resources.local_data
 
@@ -104,3 +133,5 @@ def fetch_datas(source, symbols, timeframes: list, testing_period: TestingPeriod
         datas[timeframe] = data
 
     return datas
+
+

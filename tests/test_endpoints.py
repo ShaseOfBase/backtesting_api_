@@ -15,17 +15,17 @@ def test_bt_request():
     ri_ma = RestIndicator(alias='slow_ma',
                           indicator='ma',
                           timeframe='1d',
-                          run_kwargs=dict(window=[20, 30, 40, 50]))
+                          run_kwargs=dict(window=[20, 50]))
 
     ri_macd = RestIndicator(alias='fast_macd',
                             indicator='macd',  # possible values are hist, macd, signal
                             timeframe='4h',
                             )
 
-    bt_request = BtRequest(symbols=['BTCUSDT', 'ETHUSDT'],
+    bt_request = BtRequest(symbols=['BTCUSDT'],
                            testing_period=tp,
                            indicators=[ri_ma, ri_macd],
-                           custom_ranges=dict(macd_hist_long=[0, 1, 2]),
+                           custom_ranges=dict(macd_hist_long=[0, 2]),
                            entries='fast_macd.hist |> macd_hist_long',
                            exits='fast_macd.hist < 0')
 

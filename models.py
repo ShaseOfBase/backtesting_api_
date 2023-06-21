@@ -117,8 +117,8 @@ class RestIndicator(json.JSONEncoder):
                 if key not in avlbl_run_keys:
                     raise ValueError(f'run_kwargs key {key} not in available keys {avlbl_run_keys}')
 
-                if len(self.run_kwargs[key]) > 3:
-                    raise ValueError(f'run_kwargs value must be a list of length 3 or less')
+                if len(self.run_kwargs[key]) not in [2, 3]:
+                    raise ValueError(f'run_kwargs value must be 2 or 3 values')
 
         return True
 
@@ -131,12 +131,13 @@ class BtRequest(json.JSONEncoder):
     custom_ranges: Optional[dict]
     entries: str
     exits: str
-    test_var: Optional[str] = 'sharpe_ratio'
     sl_stop: Optional[str] = '0.0'
     tp_stop: Optional[str] = '0.0'
     tsl_stop: Optional[str] = '0.0'
     fee: Optional[str] = '0.0'
     slippage: Optional[str] = '0.0'
+    n_trials: Optional[int] = 10
+    objective_value: Optional[str] = 'sharpe_ratio'
     parameter_merge: Optional[str] = 'concat'
     cross_validation: Optional[str] = 'none'
     graph_analysis: Optional[bool] = False
@@ -156,6 +157,11 @@ class BtRequest(json.JSONEncoder):
 
         if len(self.indicators) > BaseConfig.max_indicators:
             raise ValueError(f'Too many indicators, max {BaseConfig.max_indicators}')
+
+        for key, value in self.custom_ranges.items():
+            if len(value) not in [2, 3]:
+                raise ValueError(f'Custom range {key} must have 2 or 3 values')
+
 
     def __repr__(self):
         return f'BtRequest: {self.__dict__}'

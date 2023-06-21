@@ -1,5 +1,7 @@
 import vectorbtpro as vbt
 
+from indicators.indicator_run_caching import get_cached_indicator_run_result, cache_indicator_run_result
+
 indicator_library = {
     'adx': {'vbt_indicator': vbt.IF.get_indicator('talib:ADX'),
             'default_value': 'real',
@@ -57,7 +59,7 @@ def get_indicator_key_value(indicator: str, key_value: str):
     return indicator_library[indicator].get(key_value)
 
 
-def get_indicator_run_results(indicator: str, data, run_kwargs: dict = None):
+def get_indicator_run_results(timeframe_data, indicator: str, run_kwargs: dict = None):
     '''Returns the results of the run_values for the indicator'''
     vbt_indicator = get_indicator_key_value(indicator, 'vbt_indicator')
 
@@ -68,15 +70,23 @@ def get_indicator_run_results(indicator: str, data, run_kwargs: dict = None):
 
     data_run_kwargs = {}
     for param in data_run_params:
-        data_run_kwargs[param] = eval(f'data.{param}')
+        data_run_kwargs[param] = eval(f'timeframe_data.{param}')
 
-    indicator_run = vbt_indicator.run(**data_run_kwargs, **run_kwargs)
+    indicator_run_result = get_cached_indicator_run_result(data_instance=timeframe_data,
+                                                           indicator=indicator,
+                                                           run_kwargs=run_kwargs)
+    if not indicator_run_result:
+        indicator_run_result = vbt_indicator.run(**data_run_kwargs, **run_kwargs)
+        cache_indicator_run_result(run_result=indicator_run_result,
+                                   data_instance=timeframe_data,
+                                   indicator=indicator,
+                                   run_kwargs=run_kwargs)
 
     avlbl_values = get_indicator_key_value(indicator, 'avlbl_values')
 
     run_results = {}
     for run_value in avlbl_values:
-        run_results[run_value] = eval(f'indicator_run.{run_value}')
+        run_results[run_value] = eval(f'indicator_run_result.{run_value}')
 
     return run_results
 
