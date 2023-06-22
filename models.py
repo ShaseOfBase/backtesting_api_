@@ -125,17 +125,17 @@ class RestIndicator(json.JSONEncoder):
 
 @dataclass
 class BtRequest(json.JSONEncoder):
-    symbols: list
+    symbol: str
     testing_period: TestingPeriod | dict
     indicators: List[RestIndicator] | List[dict]
     custom_ranges: Optional[dict]
     entries: str
     exits: str
-    sl_stop: Optional[str] = '0.0'
-    tp_stop: Optional[str] = '0.0'
-    tsl_stop: Optional[str] = '0.0'
-    fee: Optional[str] = '0.0'
-    slippage: Optional[str] = '0.0'
+    sl_stop: Optional[float] = 0.0
+    tp_stop: Optional[float] = 0.0
+    tsl_stop: Optional[float] = 0.0
+    fee: Optional[float] = 0.0
+    slippage: Optional[float] = 0.0
     n_trials: Optional[int] = 10
     objective_value: Optional[str] = 'sharpe_ratio'
     parameter_merge: Optional[str] = 'concat'

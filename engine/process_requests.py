@@ -43,6 +43,42 @@ def handle_crossed_operator(operator_string):
     return ' '.join(split_string)
 
 
+def format_action_string(action_string: str, indicator_aliases: list, indicator_run_results: dict):
+    '''Converts user-friendly action string to one that can be evaluated by eval()'''
+    fixed_action_string_words = []
+
+    for word in action_string.split():
+        left_brack = False
+        right_brack = False
+        if '(' in word:
+            left_brack = True
+        if ')' in word:
+            right_brack = True
+
+        word = word.replace('(', '').replace(')', '')
+
+        if word in indicator_run_results:
+            fixed_word = f'indicator_run_results["{word}"]'
+
+        elif word in indicator_aliases and '.' not in word:  # then this must intend to reference the default value
+            for key in indicator_run_results:
+                if word in key:
+                    fixed_word = f'indicator_run_results["{key}"]'
+                    break
+        else:
+            fixed_word = word
+
+        if left_brack:
+            fixed_word = '(' + fixed_word
+        if right_brack:
+            fixed_word = fixed_word + ')'
+
+        fixed_action_string_words.append(fixed_word)
+
+    fixed_action_string = ' '.join(fixed_action_string_words)
+    return fixed_action_string
+
+
 def get_timeframed_run_results(timeframed_data, rest_indicators):
     timeframed_run_results = defaultdict(dict)
     for timeframe, timeframe_data in timeframed_data.items():
@@ -63,7 +99,7 @@ def get_timeframed_run_results(timeframed_data, rest_indicators):
 
 def process_bt_request(bt_request: BtRequest):
     timeframed_data = fetch_datas(source=bt_request.source,
-                                  symbols=bt_request.symbols,
+                                  symbol=bt_request.symbol,
                                   timeframes=[indicator.timeframe for indicator in bt_request.indicators],
                                   testing_period=bt_request.testing_period)
 
@@ -81,7 +117,7 @@ def process_bt_request(bt_request: BtRequest):
     use_optuna = True
     if use_optuna:
         study_name = 'cool_study12'
-        #storage = "sqlite:///{}.db".format(study_name)
+        # storage = "sqlite:///{}.db".format(study_name)
         study = optuna.create_study(study_name=study_name, direction='maximize')
 
         def objective(trial):
@@ -90,8 +126,8 @@ def process_bt_request(bt_request: BtRequest):
             for kwargs_set in kwargs_to_add:
                 for key, value in kwargs_set.items():
                     if not isinstance(value, list):
-                      run_kwargs[key] = value
-                      continue
+                        run_kwargs[key] = value
+                        continue
 
                     suggested_value = get_suggested_value(trial, suggestion_key=key, value=value)
 
@@ -114,7 +150,7 @@ def process_bt_request(bt_request: BtRequest):
             if bt_request.tsl_stop:
                 if isinstance(bt_request.tsl_stop, list):
                     run_kwargs['tsl_stop'] = get_suggested_value(trial, suggestion_key='tsl_stop',
-                                                                value=bt_request.tsl_stop)
+                                                                 value=bt_request.tsl_stop)
                 else:
                     run_kwargs['tsl_stop'] = bt_request.tsl_stop
 
@@ -124,13 +160,20 @@ def process_bt_request(bt_request: BtRequest):
             if bt_request.slippage:
                 run_kwargs['slippage'] = bt_request.slippage
 
-            r = get_pf(timeframed_data, bt_request=bt_request, **run_kwargs)
+            pf = get_pf(timeframed_data, bt_request=bt_request, **run_kwargs)
+
+            if bt_request.objective_value == 'sharpe_ratio':
+                return pf.sharpe_ratio[0]
+            elif bt_request.objective_value == 'total_return':
+                return pf.total_return[0]
+            else:
+                raise ValueError(f'Invalid objective value: {bt_request.objective_value}')
 
         study.optimize(objective, n_trials=bt_request.n_trials)
         clear_indicator_run_cache()
         print(1)
 
-    else:
+    '''else:
         run_kwargs = {}
 
         for rest_indicator in bt_request.indicators:
@@ -158,15 +201,19 @@ def process_bt_request(bt_request: BtRequest):
             run_kwargs['slippage'] = vbt.Param(bt_request.slippage)
 
         r = get_pf(timeframed_data, bt_request=bt_request, **run_kwargs)  # todo <- this will need to be paramaterized
+    '''
 
 
 def get_pf(timeframed_data, bt_request, **kwargs):
     live_run_indicators = get_live_run_indicators(bt_request, kwargs)
-    timeframed_run_results = get_timeframed_run_results(timeframed_data, live_run_indicators)
+    live_run_aliases = [indicator.alias for indicator in live_run_indicators]
+    timeframed_run_results = get_timeframed_run_results(timeframed_data, live_run_indicators)  # todo <- resample slower timeframes to fastest timeframe
 
+    entry_string = bt_request.entries
+    exit_string = bt_request.exits
     for key, value in kwargs.items():
-        bt_request.entries = bt_request.entries.replace(key, str(value))
-        bt_request.exits = bt_request.exits.replace(key, str(value))
+        entry_string = entry_string.replace(key, str(value))
+        exit_string = exit_string.replace(key, str(value))
 
     indicator_run_results = {}
     for timeframe, indicator_results in timeframed_run_results.items():
@@ -174,28 +221,22 @@ def get_pf(timeframed_data, bt_request, **kwargs):
             for run_value, run_result in run_results.items():
                 indicator_run_results[f'{indicator_alias}.{run_value}'] = run_result
 
-    for word in bt_request.entries.split():
-        if word in indicator_run_results:
-            bt_request.entries = bt_request.entries.replace(word, f'indicator_run_results["{word}"]')
+    entry_string = format_action_string(entry_string, indicator_aliases=live_run_aliases,
+                                        indicator_run_results=indicator_run_results)
 
-    for word in bt_request.exits.split():
-        if word in indicator_run_results:
-            bt_request.exits = bt_request.exits.replace(word, f'indicator_run_results["{word}"]')
+    exit_string = format_action_string(exit_string, indicator_aliases=live_run_aliases,
+                                       indicator_run_results=indicator_run_results)
 
-    bt_request.entries = handle_crossed_operator(bt_request.entries)
-    bt_request.exits = handle_crossed_operator(bt_request.exits)
+    entry_string = handle_crossed_operator(entry_string)
+    exit_string = handle_crossed_operator(exit_string)
 
-    entries = eval(bt_request.entries)
-    exits =eval(bt_request.exits)
+    entries = np.where(eval(entry_string), True, False)
+    exits = np.where(eval(exit_string), True, False)
 
     fastest_timeframed_data = get_fastest_timeframe_data(timeframed_data)
-    if BtRequest.objective_value == 'sharpe_ratio':
-        pf = vbt.Portfolio.from_signals(close=fastest_timeframed_data, entries=entries, exits=exits)
-        return pf.sharpe_ratio
-    elif BtRequest.objective_value == 'total_return':
-        return vbt.Portfolio.from_signals(fastest_timeframed_data, entries=entries, exits=exits).total_return
-    else:
-        raise ValueError(f'Objective value {BtRequest.objective_value} not supported')
+
+    return vbt.Portfolio.from_signals(close=fastest_timeframed_data, entries=entries, exits=exits)
+
     # todo - get fee, slippage and stops from kwargs else default
     # todo - delete stops that are 0 or negative from new pf run_kwargs - still to be built
 
