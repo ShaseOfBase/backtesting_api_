@@ -1,6 +1,7 @@
+import numpy as np
 import vectorbtpro as vbt
 
-from engine.data.data_manager import convert_std_timeframe_to_pandas_timeframe
+from engine.data.data_manager import convert_std_timeframe_to_pandas_timeframe, reshape_slow_timeframe_data_to_fast
 from indicators.indicator_run_caching import get_cached_indicator_run_result, cache_indicator_run_result
 
 indicator_library = {
@@ -60,7 +61,8 @@ def get_indicator_key_value(indicator: str, key_value: str):
     return indicator_library[indicator].get(key_value)
 
 
-def get_indicator_run_results(fastest_timeframe, timeframe_data, indicator: str, run_kwargs: dict = None):
+def get_indicator_run_results(fastest_timeframe_data, fastest_timeframe,
+                              timeframe_data, indicator: str, run_kwargs: dict = None):
     '''Returns the results of the run_values for the indicator'''
     vbt_indicator = get_indicator_key_value(indicator, 'vbt_indicator')
 
@@ -88,7 +90,14 @@ def get_indicator_run_results(fastest_timeframe, timeframe_data, indicator: str,
     run_results = {}
     for run_value in avlbl_values:
         pandas_timeframe = convert_std_timeframe_to_pandas_timeframe(fastest_timeframe)
-        run_results[run_value] = eval(f'indicator_run_result.{run_value}').resample(pandas_timeframe).asfreq().ffill()
+        run_result = eval(f'indicator_run_result.{run_value}').resample(pandas_timeframe).asfreq().ffill()
+        run_result = reshape_slow_timeframe_data_to_fast(
+            slow_timeframe_data=run_result,
+            fastest_timeframe_index=fastest_timeframe_data.index)
+
+        run_result = np.array(run_result)
+        run_result = run_result.reshape(run_result.shape[0])
+        run_results[run_value] = run_result
 
     return run_results
 

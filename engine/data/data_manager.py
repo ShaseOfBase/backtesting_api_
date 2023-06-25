@@ -22,6 +22,40 @@ def resample_vbt_data(vbt_data, timeframe: str):
     return vbt_data.resample(timeframe)
 
 
+def reshape_slow_timeframe_data_to_fast(slow_timeframe_data, fastest_timeframe_index):
+    slow_timeframe_data = slow_timeframe_data.reindex(fastest_timeframe_index)
+    slow_timeframe_data = slow_timeframe_data.fillna(method='ffill')
+
+    return slow_timeframe_data
+
+
+def reshape_vbt_data_to_fast(slow_timeframe_data, fastest_timeframe_index, symbol, tz: str):
+    ''' Extend slow timeframe data to match the index of the fastest timeframe data '''
+
+    ohlcv_data = convert_vbt_data_to_ohlcv(slow_timeframe_data)
+    for key, data in ohlcv_data.items():
+        ohlcv_data[key] = data.reindex(fastest_timeframe_index)
+        ohlcv_data[key] = ohlcv_data[key].fillna(method='ffill')
+
+    vbt_data = convert_ohlcv_to_vbt_data(ohlcv_data, symbol, tz=tz)
+
+    return vbt_data
+
+
+def convert_vbt_data_to_ohlcv(vbt_data):
+    return {
+        'open': vbt_data.open,
+        'high': vbt_data.high,
+        'low': vbt_data.low,
+        'close': vbt_data.close,
+        'volume': vbt_data.volume
+    }
+
+
+def convert_ohlcv_to_vbt_data(ohlcv_data, symbol, tz: str):
+    return vbt.BinanceData.from_data({symbol: ohlcv_data}, tz_convert=tz)
+
+
 def get_minutes_from_timeframe(timeframe: str):
     ''' Get the number of minutes from a timeframe '''
     timeframe = timeframe.lower()
@@ -84,7 +118,7 @@ def get_merged_data(testing_period, timeframe, symbol, source='binance'):  # tod
                 periods_required_sr.loc[period] = True
 
         if file_needed:
-            required_files.add(symbol_timeframe_data_folder / filename.name)
+            required_files.add(symbol_timeframe_data_folder / filename.name)  # todo <- add timezone to this when we turn into public api...
 
         if periods_required_sr.all():
             break
@@ -107,7 +141,7 @@ def get_merged_data(testing_period, timeframe, symbol, source='binance'):  # tod
             filename = f'{period_chunk[0]}_{period_chunk[-1]}'.replace(':', '-')
             full_file_path = symbol_timeframe_data_folder / filename
             if not os.path.exists(symbol_timeframe_data_folder):
-                full_file_path.mkdir(parents=True)
+                symbol_timeframe_data_folder.mkdir(parents=True)
 
             data.save(full_file_path)
             required_files.add(full_file_path)

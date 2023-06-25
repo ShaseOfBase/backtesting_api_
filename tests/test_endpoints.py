@@ -10,7 +10,8 @@ def test_bt_request():
     client = TestClient(app)
 
     tp = TestingPeriod(start='2023-01-15 00:00',
-                       end='2023-04-01 00:00')
+                       end='2023-04-01 00:00',
+                       tz='Africa/Johannesburg')
 
     ri_ma_fast = RestIndicator(alias='fast_ma',
                                indicator='ma',

@@ -1,9 +1,9 @@
 from collections import defaultdict
-
+import pandas as pd
 import numpy as np
 import vectorbtpro as vbt
 from backtesting.decorators import std_parameterized
-from engine.data.data_manager import fetch_datas, get_fastest_timeframe_data
+from engine.data.data_manager import fetch_datas, get_fastest_timeframe_data, reshape_slow_timeframe_data_to_fast
 from engine.optuna_processing import get_suggested_value
 from indicators.indicator_library import indicator_library, get_indicator_key_value, get_indicator_run_results
 from indicators.indicator_run_caching import clear_indicator_run_cache
@@ -28,15 +28,16 @@ def get_live_run_indicators(bt_request, kwargs):
 
 
 def handle_crossed_operator(operator_string):
+    operator_string = operator_string.replace('(', '( ').replace(')', ' )')
     split_string = operator_string.split()
     for i, word in enumerate(split_string):
         if word == '|>':
-            split_string[i - 1] = split_string[i - 1] + f'.vbt.crossed_above({split_string[i + 1]})'
+            split_string[i - 1] = 'pd.Series(' + split_string[i - 1] + f').vbt.crossed_above({split_string[i + 1]})'
             split_string[i] = ''
             split_string[i + 1] = ''
 
         elif word == '<|':
-            split_string[i - 1] = split_string[i - 1] + f'.vbt.crossed_below({split_string[i + 1]})'
+            split_string[i - 1] = 'pd.Series(' + split_string[i - 1] + f').vbt.crossed_below({split_string[i + 1]})'
             split_string[i] = ''
             split_string[i + 1] = ''
 
@@ -81,17 +82,25 @@ def format_action_string(action_string: str, indicator_aliases: list, indicator_
 
 def get_timeframed_run_results(timeframed_data, rest_indicators):
     timeframed_run_results = defaultdict(dict)
-    _, fastest_timeframe = get_fastest_timeframe_data(timeframed_data)
+    fastest_timeframe_data, fastest_timeframe = get_fastest_timeframe_data(timeframed_data)
+
     for timeframe, timeframe_data in timeframed_data.items():
         for rest_indicator in rest_indicators:
             if rest_indicator.timeframe != timeframe:
                 continue
 
             if rest_indicator.run_kwargs:
-                run_results = get_indicator_run_results(fastest_timeframe, timeframe_data, rest_indicator.indicator,
+                run_results = get_indicator_run_results(fastest_timeframe_data=fastest_timeframe_data,
+                                                        fastest_timeframe=fastest_timeframe,
+                                                        timeframe_data=timeframe_data,
+                                                        indicator=rest_indicator.indicator,
                                                         run_kwargs=rest_indicator.run_kwargs)
             else:
-                run_results = get_indicator_run_results(fastest_timeframe, timeframe_data, rest_indicator.indicator)
+                run_results = get_indicator_run_results(fastest_timeframe_data=fastest_timeframe_data,
+                                                        fastest_timeframe=fastest_timeframe,
+                                                        timeframe_data=timeframe_data,
+                                                        indicator=rest_indicator.indicator,
+                                                        run_kwargs=rest_indicator.run_kwargs)
 
             timeframed_run_results[timeframe][rest_indicator.alias] = run_results
 
@@ -208,7 +217,7 @@ def process_bt_request(bt_request: BtRequest):
 def get_pf(timeframed_data, bt_request, **kwargs):
     live_run_indicators = get_live_run_indicators(bt_request, kwargs)
     live_run_aliases = [indicator.alias for indicator in live_run_indicators]
-    timeframed_run_results = get_timeframed_run_results(timeframed_data, live_run_indicators)  # todo <- resample slower timeframes to fastest timeframe
+    timeframed_run_results = get_timeframed_run_results(timeframed_data, live_run_indicators)
 
     entry_string = bt_request.entries
     exit_string = bt_request.exits
@@ -231,12 +240,14 @@ def get_pf(timeframed_data, bt_request, **kwargs):
     entry_string = handle_crossed_operator(entry_string)
     exit_string = handle_crossed_operator(exit_string)
 
-    entries = eval(entry_string)
-    exits = eval(exit_string)
+    entries = np.where(eval(entry_string), True, False)
+    exits = np.where(eval(exit_string), True, False)
 
     fastest_timeframed_data, _ = get_fastest_timeframe_data(timeframed_data)
 
-    return vbt.Portfolio.from_signals(close=fastest_timeframed_data, entries=entries, exits=exits)
+    pf = vbt.Portfolio.from_signals(fastest_timeframed_data.close, entries=entries, exits=exits)
+
+    return pf
 
     # todo - get fee, slippage and stops from kwargs else default
     # todo - delete stops that are 0 or negative from new pf run_kwargs - still to be built
