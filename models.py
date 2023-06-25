@@ -1,52 +1,12 @@
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, List
-
-import pandas as pd
 import pytz
 from base_config import BaseConfig, valid_sources, valid_symbols, bad_operators, bad_aliases, arithmetic_operators, \
     comparison_operators, flow_operators, valid_timeframes
 from engine.utils import get_periods_in_testing_period
 from indicators.indicator_library import indicator_library, get_indicator_key_value
 import json
-
-
-#{
-#	'source': 'binance',
-#	'symbols': ['BTCUSDT', 'ETHUSDT'],
-#   'testing_period': {'start': '2023-02-01 00:00', 'end': '2023-03-03 14:00', tz='UTC'},
-#	'data_periods': [ {'alias': 'my_4h',
-#               	'timeframe': '4h',
-#                   'start': '2023-02-01 00:00', 'end': '2023-03-03 14:00', tz='UTC'},
-#					{'alias': 'my_4h',
-#               	'timeframe': '4h',
-#                   'start': '2023-02-01 00:00', 'end': '2023-03-03 14:00', tz='UTC'},  # defaults to now - 30 periods
-#				  ],
-#	'indicators': [{'alias': 'ma_slow',
-#                   'timeframe': '4h',
-#					'indicator': 'ma',
-#					'window': [40, 50, 60]
-#				  },
-#				  {'alias': 'ma_fast',
-#                   'timeframe': '4h',
-#					'indicator': 'ma',
-#					'window': [12, 15, 18]
-#				  },
-#				  {'alias': 'bbands',
-#                   'timeframe': '1d',
-#					'indicator': 'bbands',
-#                   'values': [lower, middle, upper, bandwidth],
-#					'window': 20
-#				  },],
-#	'parameter_merge': 'concat' # default concat, add the other one(s) at a later date
- #   'entry': 'adx > 25 @4h', 'close < bbands.middle @1d'],
-#	'exits': ['adx < adx_long @4h', 'close > bbands.upper * 1.03 @1d'],
-#	'cross_validation': 'rolling 3',
-#	'graph_analysis': true # <- error, graph_analysis requires scalar parameters only. see https://helper for details
-#}
-
-# returns all pf results, if graph_analysis -> returns graph_html as well as parameter grid result.
-# headers return cost of the call, total
 
 
 @dataclass

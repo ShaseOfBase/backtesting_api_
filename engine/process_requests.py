@@ -81,16 +81,17 @@ def format_action_string(action_string: str, indicator_aliases: list, indicator_
 
 def get_timeframed_run_results(timeframed_data, rest_indicators):
     timeframed_run_results = defaultdict(dict)
+    _, fastest_timeframe = get_fastest_timeframe_data(timeframed_data)
     for timeframe, timeframe_data in timeframed_data.items():
         for rest_indicator in rest_indicators:
             if rest_indicator.timeframe != timeframe:
                 continue
 
             if rest_indicator.run_kwargs:
-                run_results = get_indicator_run_results(timeframe_data, rest_indicator.indicator,
+                run_results = get_indicator_run_results(fastest_timeframe, timeframe_data, rest_indicator.indicator,
                                                         run_kwargs=rest_indicator.run_kwargs)
             else:
-                run_results = get_indicator_run_results(timeframe_data, rest_indicator.indicator)
+                run_results = get_indicator_run_results(fastest_timeframe, timeframe_data, rest_indicator.indicator)
 
             timeframed_run_results[timeframe][rest_indicator.alias] = run_results
 
@@ -230,10 +231,10 @@ def get_pf(timeframed_data, bt_request, **kwargs):
     entry_string = handle_crossed_operator(entry_string)
     exit_string = handle_crossed_operator(exit_string)
 
-    entries = np.where(eval(entry_string), True, False)
-    exits = np.where(eval(exit_string), True, False)
+    entries = eval(entry_string)
+    exits = eval(exit_string)
 
-    fastest_timeframed_data = get_fastest_timeframe_data(timeframed_data)
+    fastest_timeframed_data, _ = get_fastest_timeframe_data(timeframed_data)
 
     return vbt.Portfolio.from_signals(close=fastest_timeframed_data, entries=entries, exits=exits)
 

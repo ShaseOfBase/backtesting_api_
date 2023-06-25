@@ -1,5 +1,6 @@
 import vectorbtpro as vbt
 
+from engine.data.data_manager import convert_std_timeframe_to_pandas_timeframe
 from indicators.indicator_run_caching import get_cached_indicator_run_result, cache_indicator_run_result
 
 indicator_library = {
@@ -59,7 +60,7 @@ def get_indicator_key_value(indicator: str, key_value: str):
     return indicator_library[indicator].get(key_value)
 
 
-def get_indicator_run_results(timeframe_data, indicator: str, run_kwargs: dict = None):
+def get_indicator_run_results(fastest_timeframe, timeframe_data, indicator: str, run_kwargs: dict = None):
     '''Returns the results of the run_values for the indicator'''
     vbt_indicator = get_indicator_key_value(indicator, 'vbt_indicator')
 
@@ -86,7 +87,8 @@ def get_indicator_run_results(timeframe_data, indicator: str, run_kwargs: dict =
 
     run_results = {}
     for run_value in avlbl_values:
-        run_results[run_value] = eval(f'indicator_run_result.{run_value}')
+        pandas_timeframe = convert_std_timeframe_to_pandas_timeframe(fastest_timeframe)
+        run_results[run_value] = eval(f'indicator_run_result.{run_value}').resample(pandas_timeframe).asfreq().ffill()
 
     return run_results
 

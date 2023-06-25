@@ -1,12 +1,10 @@
 import os
 from datetime import datetime
-
 import numpy as np
 import pandas as pd
 import vectorbtpro as vbt
-
 from base_config import BaseConfig
-from models import TestingPeriod
+
 
 data_library = {}
 
@@ -20,6 +18,10 @@ def convert_std_timeframe_to_pandas_timeframe(timeframe: str):
     return timeframe
 
 
+def resample_vbt_data(vbt_data, timeframe: str):
+    return vbt_data.resample(timeframe)
+
+
 def get_minutes_from_timeframe(timeframe: str):
     ''' Get the number of minutes from a timeframe '''
     timeframe = timeframe.lower()
@@ -31,7 +33,7 @@ def get_minutes_from_timeframe(timeframe: str):
         return int(timeframe.replace('d', '')) * 60 * 24
 
 
-def get_fastest_timeframe_data(timeframed_data: dict):
+def get_fastest_timeframe_data(timeframed_data: dict) -> tuple:
     """ Get the fastest timeframe data from a dict of timeframed data """
     fastest_timeframe_mins = 0
     fastest_timeframe = None
@@ -46,8 +48,7 @@ def get_fastest_timeframe_data(timeframed_data: dict):
             fastest_timeframe_mins = timeframe_minutes
             fastest_timeframe = timeframe
 
-    return timeframed_data[fastest_timeframe]
-
+    return timeframed_data[fastest_timeframe], fastest_timeframe
 
 def get_merged_data(testing_period, timeframe, symbol, source='binance'):  # todo customize for sources & different tzs
     base_local_data_folder = BaseConfig.resources.local_data
@@ -103,7 +104,7 @@ def get_merged_data(testing_period, timeframe, symbol, source='binance'):  # tod
                                          end=period_chunk[-1],
                                          timeframe=timeframe,
                                          execute_kwargs={'engine': 'threadpool'})
-            filename = f'{periods_still_needed[0]}_{periods_still_needed[-1]}'.replace(':', '-')
+            filename = f'{period_chunk[0]}_{period_chunk[-1]}'.replace(':', '-')
             full_file_path = symbol_timeframe_data_folder / filename
             if not os.path.exists(symbol_timeframe_data_folder):
                 full_file_path.mkdir(parents=True)
@@ -121,7 +122,7 @@ def get_merged_data(testing_period, timeframe, symbol, source='binance'):  # tod
     return data.loc[testing_period_start.strftime('%Y-%m-%d %H:%M'):testing_period_end.strftime('%Y-%m-%d %H:%M')]
 
 
-def fetch_datas(source, symbol, timeframes: list, testing_period: TestingPeriod):
+def fetch_datas(source, symbol, timeframes: list, testing_period):
     datas = {}
 
     for timeframe in timeframes:
