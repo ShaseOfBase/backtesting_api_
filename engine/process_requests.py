@@ -139,28 +139,28 @@ def process_bt_request(bt_request: BtRequest):
                         run_kwargs[key] = value
                         continue
 
-                    suggested_value = get_suggested_value(trial, suggestion_key=key, value=value)
+                    suggested_value = round(get_suggested_value(trial, suggestion_key=key, value=value), 5)
 
                     run_kwargs[key] = suggested_value
 
             if bt_request.sl_stop:
                 if isinstance(bt_request.sl_stop, list):
-                    run_kwargs['sl_stop'] = get_suggested_value(trial, suggestion_key='sl_stop',
-                                                                value=bt_request.sl_stop)
+                    run_kwargs['sl_stop'] = round(get_suggested_value(trial, suggestion_key='sl_stop',
+                                                                      value=bt_request.sl_stop), 5)
                 else:
                     run_kwargs['sl_stop'] = bt_request.sl_stop
 
             if bt_request.tp_stop:
                 if isinstance(bt_request.tp_stop, list):
-                    run_kwargs['tp_stop'] = get_suggested_value(trial, suggestion_key='tp_stop',
-                                                                value=bt_request.tp_stop)
+                    run_kwargs['tp_stop'] = round(get_suggested_value(trial, suggestion_key='tp_stop',
+                                                                      value=bt_request.tp_stop), 5)
                 else:
                     run_kwargs['tp_stop'] = bt_request.tp_stop
 
             if bt_request.tsl_stop:
                 if isinstance(bt_request.tsl_stop, list):
-                    run_kwargs['tsl_stop'] = get_suggested_value(trial, suggestion_key='tsl_stop',
-                                                                 value=bt_request.tsl_stop)
+                    run_kwargs['tsl_stop'] = round(get_suggested_value(trial, suggestion_key='tsl_stop',
+                                                                       value=bt_request.tsl_stop), 5)
                 else:
                     run_kwargs['tsl_stop'] = bt_request.tsl_stop
 
@@ -173,9 +173,9 @@ def process_bt_request(bt_request: BtRequest):
             pf = get_pf(timeframed_data, bt_request=bt_request, **run_kwargs)
 
             if bt_request.objective_value == 'sharpe_ratio':
-                return pf.sharpe_ratio[0]
+                return pf.sharpe_ratio.values[0]
             elif bt_request.objective_value == 'total_return':
-                return pf.total_return[0]
+                return pf.total_return.values[0]
             else:
                 raise ValueError(f'Invalid objective value: {bt_request.objective_value}')
 
@@ -243,9 +243,10 @@ def get_pf(timeframed_data, bt_request, **kwargs):
     entries = np.where(eval(entry_string), True, False)
     exits = np.where(eval(exit_string), True, False)
 
-    fastest_timeframed_data, _ = get_fastest_timeframe_data(timeframed_data)
+    fastest_timeframed_data, fastest_timeframe = get_fastest_timeframe_data(timeframed_data)
 
-    pf = vbt.Portfolio.from_signals(fastest_timeframed_data.close, entries=entries, exits=exits)
+    pf = vbt.Portfolio.from_signals(fastest_timeframed_data, entries=entries, exits=exits,
+                                    freq=fastest_timeframe[-1].lower())
 
     return pf
 
