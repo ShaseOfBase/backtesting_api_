@@ -1,3 +1,4 @@
+from math import isnan
 from collections import defaultdict
 import pandas as pd
 import numpy as np
@@ -93,13 +94,13 @@ def get_timeframed_run_results(timeframed_data, rest_indicators):
                 run_results = get_indicator_run_results(fastest_timeframe_data=fastest_timeframe_data,
                                                         fastest_timeframe=fastest_timeframe,
                                                         timeframe_data=timeframe_data,
-                                                        indicator=rest_indicator.indicator,
+                                                        rest_indicator=rest_indicator,
                                                         run_kwargs=rest_indicator.run_kwargs)
             else:
                 run_results = get_indicator_run_results(fastest_timeframe_data=fastest_timeframe_data,
                                                         fastest_timeframe=fastest_timeframe,
                                                         timeframe_data=timeframe_data,
-                                                        indicator=rest_indicator.indicator,
+                                                        rest_indicator=rest_indicator,
                                                         run_kwargs=rest_indicator.run_kwargs)
 
             timeframed_run_results[timeframe][rest_indicator.alias] = run_results
@@ -171,6 +172,9 @@ def process_bt_request(bt_request: BtRequest):
                 run_kwargs['slippage'] = bt_request.slippage
 
             pf = get_pf(timeframed_data, bt_request=bt_request, **run_kwargs)
+
+            if isnan(pf.sharpe_ratio):
+                return -100000
 
             if bt_request.objective_value == 'sharpe_ratio':
                 return pf.sharpe_ratio.values[0]
@@ -246,7 +250,7 @@ def get_pf(timeframed_data, bt_request, **kwargs):
     fastest_timeframed_data, fastest_timeframe = get_fastest_timeframe_data(timeframed_data)
 
     pf = vbt.Portfolio.from_signals(fastest_timeframed_data, entries=entries, exits=exits,
-                                    freq=fastest_timeframe[-1].lower())
+                                    freq=fastest_timeframe)
 
     return pf
 

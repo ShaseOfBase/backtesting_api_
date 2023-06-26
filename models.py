@@ -35,6 +35,7 @@ class RestIndicator(json.JSONEncoder):
     alias: str
     indicator: str
     timeframe: str
+    normalize: bool = True
     run_kwargs: Optional[dict] = None
 
     def to_json(self):

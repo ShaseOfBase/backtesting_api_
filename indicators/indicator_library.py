@@ -1,6 +1,5 @@
 import numpy as np
 import vectorbtpro as vbt
-
 from engine.data.data_manager import convert_std_timeframe_to_pandas_timeframe, reshape_slow_timeframe_data_to_fast
 from indicators.indicator_run_caching import get_cached_indicator_run_result, cache_indicator_run_result
 
@@ -62,30 +61,30 @@ def get_indicator_key_value(indicator: str, key_value: str):
 
 
 def get_indicator_run_results(fastest_timeframe_data, fastest_timeframe,
-                              timeframe_data, indicator: str, run_kwargs: dict = None):
+                              timeframe_data, rest_indicator, run_kwargs: dict = None):
     '''Returns the results of the run_values for the indicator'''
-    vbt_indicator = get_indicator_key_value(indicator, 'vbt_indicator')
+    vbt_indicator = get_indicator_key_value(rest_indicator.indicator, 'vbt_indicator')
 
     if not run_kwargs:
-        run_kwargs = get_indicator_key_value(indicator, 'run_kwargs')
+        run_kwargs = get_indicator_key_value(rest_indicator.indicator, 'run_kwargs')
 
-    data_run_params = get_indicator_key_value(indicator, 'data_run_params')
+    data_run_params = get_indicator_key_value(rest_indicator.indicator, 'data_run_params')
 
     data_run_kwargs = {}
     for param in data_run_params:
         data_run_kwargs[param] = eval(f'timeframe_data.{param}')
 
     indicator_run_result = get_cached_indicator_run_result(data_instance=timeframe_data,
-                                                           indicator=indicator,
+                                                           indicator=rest_indicator.indicator,
                                                            run_kwargs=run_kwargs)
     if not indicator_run_result:
         indicator_run_result = vbt_indicator.run(**data_run_kwargs, **run_kwargs)
         cache_indicator_run_result(run_result=indicator_run_result,
                                    data_instance=timeframe_data,
-                                   indicator=indicator,
+                                   indicator=rest_indicator.indicator,
                                    run_kwargs=run_kwargs)
 
-    avlbl_values = get_indicator_key_value(indicator, 'avlbl_values')
+    avlbl_values = get_indicator_key_value(rest_indicator.indicator, 'avlbl_values')
 
     run_results = {}
     for run_value in avlbl_values:
@@ -95,8 +94,12 @@ def get_indicator_run_results(fastest_timeframe_data, fastest_timeframe,
             slow_timeframe_data=run_result,
             fastest_timeframe_index=fastest_timeframe_data.index)
 
+        if rest_indicator.normalize:
+            run_result = run_result / fastest_timeframe_data.close
+
         run_result = np.array(run_result)
         run_result = run_result.reshape(run_result.shape[0])
+
         run_results[run_value] = run_result
 
     return run_results
