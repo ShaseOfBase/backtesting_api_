@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, List
+import vectorbtpro as vbt
+import pandas as pd
 import pytz
 from base_config import BaseConfig, valid_sources, valid_symbols, bad_operators, bad_aliases, arithmetic_operators, \
     comparison_operators, flow_operators, valid_timeframes
@@ -12,7 +14,7 @@ import json
 @dataclass
 class TestingPeriod(json.JSONEncoder):
     start: str
-    end: str
+    end: str = None
     tz: str = 'Africa/Johannesburg'
 
     def to_json(self):
@@ -101,7 +103,7 @@ class BtRequest(json.JSONEncoder):
     objective_value: Optional[str] = 'sharpe_ratio'
     parameter_merge: Optional[str] = 'concat'
     cross_validation: Optional[str] = 'none'
-    graph_analysis: Optional[bool] = False
+    get_visuals_html: Optional[bool] = False
     source: str = 'binance'
     direction: str = 'long' # 'short | long | both'
     get_signal: bool = False
@@ -192,5 +194,25 @@ class IndicatorDataRequest(json.JSONEncoder):
 
             if symbol not in valid_symbols:
                 raise ValueError(f'Invalid symbol {symbol}, must be one of {valid_symbols}')
+
+
+@dataclass
+class AssessmentResult:
+    optuna_df: pd.DataFrame
+    best_params: dict
+    best_objective_value: float
+    best_trial_pf_stats: dict
+    best_trial_pf_visuals_html: str
+    signal: Optional[dict] = None
+
+
+class StratRun:
+    def __init__(self, style: str, run_object, y_val, add_to_orders=False):
+        if style not in ['raw', 'pure']:
+            raise ValueError(f'Invalid run_type: {style}')
+        self.style = style
+        self.run_object = run_object
+        self.y_val = y_val
+        self.add_to_orders = add_to_orders
 
 

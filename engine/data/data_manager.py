@@ -88,7 +88,10 @@ def get_merged_data(testing_period, timeframe, symbol, source='binance'):  # tod
     base_local_data_folder = BaseConfig.resources.local_data
 
     testing_period_start = datetime.strptime(testing_period.start, '%Y-%m-%d %H:%M')
-    testing_period_end = datetime.strptime(testing_period.end, '%Y-%m-%d %H:%M')
+    if testing_period.end :
+        testing_period_end = datetime.strptime(testing_period.end, '%Y-%m-%d %H:%M')
+    else:
+        testing_period_end = datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M')
 
     pd_timeframe = convert_std_timeframe_to_pandas_timeframe(timeframe)
 

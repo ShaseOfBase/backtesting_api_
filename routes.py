@@ -1,4 +1,4 @@
-from engine.process_requests import process_bt_request
+from engine.process_requests import run_study
 from indicators.indicator_data import get_indicator_data
 from main import app
 import pandas as pd
@@ -12,7 +12,9 @@ async def root():
 
 @app.post("/bt")
 async def say_hello(bt_request: BtRequest):
-    process_bt_request(bt_request)
+    study = run_study(bt_request)
+
+
 
     return {"message": f"Hello world"}
 

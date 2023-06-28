@@ -90,25 +90,18 @@ def get_timeframed_run_results(timeframed_data, rest_indicators):
             if rest_indicator.timeframe != timeframe:
                 continue
 
-            if rest_indicator.run_kwargs:
-                run_results = get_indicator_run_results(fastest_timeframe_data=fastest_timeframe_data,
-                                                        fastest_timeframe=fastest_timeframe,
-                                                        timeframe_data=timeframe_data,
-                                                        rest_indicator=rest_indicator,
-                                                        run_kwargs=rest_indicator.run_kwargs)
-            else:
-                run_results = get_indicator_run_results(fastest_timeframe_data=fastest_timeframe_data,
-                                                        fastest_timeframe=fastest_timeframe,
-                                                        timeframe_data=timeframe_data,
-                                                        rest_indicator=rest_indicator,
-                                                        run_kwargs=rest_indicator.run_kwargs)
+            run_results = get_indicator_run_results(fastest_timeframe_data=fastest_timeframe_data,
+                                                    fastest_timeframe=fastest_timeframe,
+                                                    timeframe_data=timeframe_data,
+                                                    rest_indicator=rest_indicator,
+                                                    run_kwargs=rest_indicator.run_kwargs)
 
             timeframed_run_results[timeframe][rest_indicator.alias] = run_results
 
     return timeframed_run_results
 
 
-def process_bt_request(bt_request: BtRequest):
+def run_study(bt_request: BtRequest):
     timeframed_data = fetch_datas(source=bt_request.source,
                                   symbol=bt_request.symbol,
                                   timeframes=[indicator.timeframe for indicator in bt_request.indicators],
@@ -172,6 +165,7 @@ def process_bt_request(bt_request: BtRequest):
                 run_kwargs['slippage'] = bt_request.slippage
 
             pf = get_pf(timeframed_data, bt_request=bt_request, **run_kwargs)
+            trial.set_user_attr('pf', pf)
 
             if isnan(pf.sharpe_ratio):
                 return -100000
@@ -185,7 +179,8 @@ def process_bt_request(bt_request: BtRequest):
 
         study.optimize(objective, n_trials=bt_request.n_trials)
         clear_indicator_run_cache()
-        print(1)
+
+        return study
 
     '''else:
         run_kwargs = {}
@@ -256,5 +251,3 @@ def get_pf(timeframed_data, bt_request, **kwargs):
 
     # todo - get fee, slippage and stops from kwargs else default
     # todo - delete stops that are 0 or negative from new pf run_kwargs - still to be built
-
-    #
