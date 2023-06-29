@@ -33,9 +33,8 @@ def get_assessment_result_from_study(study, bt_request: BtRequest) -> Assessment
         }
 
     if bt_request.get_visuals_html:
-        best_trial_pf_visuals_html = best_trial_pf.visuals_html
-
-
+        # get it from best_trial.user_attrs['strat_runs'] ? # todo <- here
+        best_trial_pf_visuals_html = get_html_pf_plot(best_trial_pf, strat_runs_dict)
 
     return AssessmentResult(optuna_df=optuna_df,
                             best_params=best_params,
@@ -45,22 +44,7 @@ def get_assessment_result_from_study(study, bt_request: BtRequest) -> Assessment
                             signal=signal_dict)
 
 
-def write_pf_plot_to_html(pf: vbt.Portfolio, strat_runs_dict: dict,
-                          dest_folder: Path, pf_run_kwargs: dict, title: str):
-    timestamp = datetime.now().strftime('%m-%d-%H-%M')
-
-    sharpe_str = round(pf.sharpe_ratio, 3)
-    total_return_str = f'{round(pf.total_return * 100, 1)}%'
-
-    for key, value in pf_run_kwargs.items():
-        if isinstance(value, float):
-            pf_run_kwargs[key] = round(value, 3)
-
-    str_run_kwargs = str(pf_run_kwargs).replace(" ", "").replace("'", "").replace(":", "=")
-    if len(str_run_kwargs) > 210:
-        str_run_kwargs = str_run_kwargs[:207] + '...'
-
-    full_filepath = dest_folder / f'{title}_{sharpe_str}_{total_return_str}_{str_run_kwargs}.html'
+def get_html_pf_plot(pf: vbt.Portfolio, strat_runs_dict: dict):
 
     subplots = [('orders_v2', {'title': 'orders_v2'}),
                 'trade_pnl',
@@ -100,5 +84,4 @@ def write_pf_plot_to_html(pf: vbt.Portfolio, strat_runs_dict: dict,
         real_entries.vbt.signals.plot_as_entry_marks(fig=fig, y=strat_run.y_val, add_trace_kwargs=dict(row=i, col=1))
         real_exits.vbt.signals.plot_as_exit_marks(fig=fig, y=strat_run.y_val, add_trace_kwargs=dict(row=i, col=1))
 
-    pf.orders.records_readable.to_csv(dest_folder / f'{timestamp}_orders.csv')
-    fig.write_html(full_filepath)
+    return fig.to_html()
