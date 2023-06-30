@@ -226,7 +226,7 @@ def get_strat_run(indicator_alias, shaped_run_result: np.array , indicator_run_o
 
     add_to_orders = ... # todo <- determine from indicator library
     style = ... # todo <- determine from indicator library
-    y_val = ... # todo <- determine from indicator library
+    y_val = ... # todo <- determine from indicator library with data passed to function...
 
     strat_run = StratRun(style='pure', run_object=indicator_run_object, y_val=y_val, add_to_orders= False)
 
