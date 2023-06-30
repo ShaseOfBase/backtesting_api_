@@ -12,6 +12,8 @@ indicator_library = {
     'bbands': {'vbt_indicator': vbt.IF.get_indicator('vbt:BBANDS'),
                'default_value': 'bandwidth',
                'avlbl_values': ['lower', 'middle', 'upper', 'bandwidth'],
+               'chart_style': {'lower': 'pure', 'middle': 'pure', 'upper': 'pure', 'bandwidth': 'raw'},
+               'chart_y_vals': {'lower': 'close', 'middle': 'close', 'upper': 'close', 'bandwidth': 'self'},
                'data_run_params': ['close'],
                'run_kwargs': {'alpha': 2, 'window': 20}},
     'mfi': {'vbt_indicator': vbt.IF.get_indicator('talib:MFI'),
@@ -74,12 +76,12 @@ def get_indicator_run_results(fastest_timeframe_data, fastest_timeframe,
     for param in data_run_params:
         data_run_kwargs[param] = eval(f'timeframe_data.{param}')
 
-    indicator_run_result = get_cached_indicator_run_result(data_instance=timeframe_data,
+    indicator_run_object = get_cached_indicator_run_result(data_instance=timeframe_data,
                                                            indicator=rest_indicator.indicator,
                                                            run_kwargs=run_kwargs)
-    if not indicator_run_result:
-        indicator_run_result = vbt_indicator.run(**data_run_kwargs, **run_kwargs)
-        cache_indicator_run_result(run_result=indicator_run_result,
+    if not indicator_run_object:
+        indicator_run_object = vbt_indicator.run(**data_run_kwargs, **run_kwargs)
+        cache_indicator_run_result(run_result=indicator_run_object,
                                    data_instance=timeframe_data,
                                    indicator=rest_indicator.indicator,
                                    run_kwargs=run_kwargs)
@@ -89,18 +91,20 @@ def get_indicator_run_results(fastest_timeframe_data, fastest_timeframe,
     run_results = {}
     for run_value in avlbl_values:
         pandas_timeframe = convert_std_timeframe_to_pandas_timeframe(fastest_timeframe)
-        run_result = eval(f'indicator_run_result.{run_value}').resample(pandas_timeframe).asfreq().ffill()
-        run_result = reshape_slow_timeframe_data_to_fast(
-            slow_timeframe_data=run_result,
+        shaped_run_result = eval(f'indicator_run_object.{run_value}').resample(pandas_timeframe).asfreq().ffill()
+        shaped_run_result = reshape_slow_timeframe_data_to_fast(
+            slow_timeframe_data=shaped_run_result,
             fastest_timeframe_index=fastest_timeframe_data.index)
 
         if rest_indicator.normalize:
-            run_result = run_result / fastest_timeframe_data.close
+            shaped_run_result = shaped_run_result / fastest_timeframe_data.close
 
-        run_result = np.array(run_result)
-        run_result = run_result.reshape(run_result.shape[0])
+        shaped_run_result = np.array(shaped_run_result)
+        shaped_run_result = shaped_run_result.reshape(shaped_run_result.shape[0])
 
-        run_results[run_value] = run_result
+        run_results[run_value] = {'shaped_run_result': shaped_run_result,
+                                  'indicator_run_object': indicator_run_object,
+                                  'data': fastest_timeframe_data}
 
     return run_results
 

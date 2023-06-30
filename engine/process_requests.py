@@ -8,7 +8,7 @@ from engine.data.data_manager import fetch_datas, get_fastest_timeframe_data, re
 from engine.optuna_processing import get_suggested_value
 from indicators.indicator_library import indicator_library, get_indicator_key_value, get_indicator_run_results
 from indicators.indicator_run_caching import clear_indicator_run_cache
-from models import BtRequest
+from models import BtRequest, StratRun
 import optuna
 
 
@@ -213,6 +213,26 @@ def run_study(bt_request: BtRequest):
     '''
 
 
+def get_indicator_from_alias(alias: str, rest_indicators):
+    for rest_indicator in rest_indicators:
+        if rest_indicator.alias == alias:
+            return rest_indicator
+
+    raise ValueError(f'Invalid indicator alias: {alias}')
+
+
+def get_strat_run(indicator_alias, shaped_run_result: np.array , indicator_run_object, data, bt_request_indicators):
+    alias_indicator_map = {rest_indicator.alias: rest_indicator.indicator for rest_indicator in bt_request_indicators}
+
+    add_to_orders = ... # todo <- determine from indicator library
+    style = ... # todo <- determine from indicator library
+    y_val = ... # todo <- determine from indicator library
+
+    strat_run = StratRun(style='pure', run_object=indicator_run_object, y_val=y_val, add_to_orders= False)
+
+    return ...
+
+
 def get_pf(timeframed_data, bt_request, **kwargs):
     live_run_indicators = get_live_run_indicators(bt_request, kwargs)
     live_run_aliases = [indicator.alias for indicator in live_run_indicators]
@@ -225,10 +245,16 @@ def get_pf(timeframed_data, bt_request, **kwargs):
         exit_string = exit_string.replace(key, str(value))
 
     indicator_run_results = {}
+    indicator_run_objects = {}
     for timeframe, indicator_results in timeframed_run_results.items():
         for indicator_alias, run_results in indicator_results.items():
             for run_value, run_result in run_results.items():
-                indicator_run_results[f'{indicator_alias}.{run_value}'] = run_result
+                key_val = f'{indicator_alias}.{run_value}'
+                indicator_run_results[key_val] = run_result['shaped_run_result']
+                indicator_run_objects[key_val] = get_strat_run(indicator_alias=indicator_alias,
+                                                               indicator_run_object=run_result['indicator_run_object'],
+                                                               y_val=run_result['y_val'],
+                                                               bt_request_indicators=bt_request.indicators)
 
     entry_string = format_action_string(entry_string, indicator_aliases=live_run_aliases,
                                         indicator_run_results=indicator_run_results)
