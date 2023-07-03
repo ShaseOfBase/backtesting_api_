@@ -33,18 +33,24 @@ def get_assessment_result_from_study(study, bt_request: BtRequest) -> Assessment
         }
 
     if bt_request.get_visuals_html:
-        # get it from best_trial.user_attrs['strat_runs'] ? # todo <- here
+        strat_runs_dict = best_trial.user_attrs['strat_runs']
         best_trial_pf_visuals_html = get_html_pf_plot(best_trial_pf, strat_runs_dict)
+        if __debug__:
+            Path('temp').mkdir(exist_ok=True)
+            with open(f'temp/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}_pf_visuals.html', 'wb') as f:
+                f.write(best_trial_pf_visuals_html.encode('utf-8'))
+    else:
+        best_trial_pf_visuals_html = None
 
     return AssessmentResult(optuna_df=optuna_df,
                             best_params=best_params,
                             best_objective_value=best_objective_value,
                             best_trial_pf_stats=best_trial_pf_stats,
-                            best_trial_pf_visuals_html=1,
+                            best_trial_pf_visuals_html=best_trial_pf_visuals_html,
                             signal=signal_dict)
 
 
-def get_html_pf_plot(pf: vbt.Portfolio, strat_runs_dict: dict):
+def get_html_pf_plot(pf: vbt.Portfolio, strat_runs_dict: dict) -> str:
 
     subplots = [('orders_v2', {'title': 'orders_v2'}),
                 'trade_pnl',

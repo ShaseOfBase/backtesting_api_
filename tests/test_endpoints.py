@@ -37,7 +37,8 @@ def test_bt_request():
                            custom_ranges=dict(macd_hist_long=[-0.5, 0.5]),
                            entries='(fast_macd.hist >= macd_hist_long)',
                            exits='fast_macd.hist < 0',
-                           n_trials=100)
+                           n_trials=100,
+                           get_visuals_html=True)
 
     response = client.post("/bt", data=bt_request.to_json())
     assert response.status_code == 200

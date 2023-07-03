@@ -209,7 +209,7 @@ class AssessmentResult:
 class StratRun:
     def __init__(self, style: str, run_object, y_val, add_to_orders=False):
         if style not in ['raw', 'pure']:
-            raise ValueError(f'Invalid run_type: {style}')
+            raise ValueError(f'Invalid style: {style}')
         self.style = style
         self.run_object = run_object
         self.y_val = y_val

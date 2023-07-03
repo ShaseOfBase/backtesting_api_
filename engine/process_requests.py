@@ -6,7 +6,8 @@ import vectorbtpro as vbt
 from backtesting.decorators import std_parameterized
 from engine.data.data_manager import fetch_datas, get_fastest_timeframe_data, reshape_slow_timeframe_data_to_fast
 from engine.optuna_processing import get_suggested_value
-from indicators.indicator_library import indicator_library, get_indicator_key_value, get_indicator_run_results
+from indicators.indicator_library import indicator_library, get_indicator_key_value, get_indicator_run_results, \
+    get_chart_options_value
 from indicators.indicator_run_caching import clear_indicator_run_cache
 from models import BtRequest, StratRun
 import optuna
@@ -164,8 +165,9 @@ def run_study(bt_request: BtRequest):
             if bt_request.slippage:
                 run_kwargs['slippage'] = bt_request.slippage
 
-            pf = get_pf(timeframed_data, bt_request=bt_request, **run_kwargs)
+            pf, strat_runs = get_pf_and_strat_runs(timeframed_data, bt_request=bt_request, **run_kwargs)
             trial.set_user_attr('pf', pf)
+            trial.set_user_attr('strat_runs', strat_runs)
 
             if isnan(pf.sharpe_ratio):
                 return -100000
@@ -221,19 +223,27 @@ def get_indicator_from_alias(alias: str, rest_indicators):
     raise ValueError(f'Invalid indicator alias: {alias}')
 
 
-def get_strat_run(indicator_alias, shaped_run_result: np.array , indicator_run_object, data, bt_request_indicators):
+def get_strat_run(indicator_alias, run_value, shaped_run_result: np.array, indicator_run_object, data,
+                  bt_request_indicators):
     alias_indicator_map = {rest_indicator.alias: rest_indicator.indicator for rest_indicator in bt_request_indicators}
+    base_kwargs = {
+        'indicator': alias_indicator_map[indicator_alias],
+        'run_value': run_value,
+        'data': data,
+        'shaped_run_result': shaped_run_result,
+    }
 
-    add_to_orders = ... # todo <- determine from indicator library
-    style = ... # todo <- determine from indicator library
-    y_val = ... # todo <- determine from indicator library with data passed to function...
+    add_to_orders = get_chart_options_value(option='add_to_orders',
+                                            **base_kwargs)
+    style = get_chart_options_value(option='style',
+                                    **base_kwargs)
+    y_val = get_chart_options_value(option='y_val',
+                                    **base_kwargs)
 
-    strat_run = StratRun(style='pure', run_object=indicator_run_object, y_val=y_val, add_to_orders= False)
-
-    return ...
+    return StratRun(style=style, run_object=indicator_run_object, y_val=y_val, add_to_orders=add_to_orders)
 
 
-def get_pf(timeframed_data, bt_request, **kwargs):
+def get_pf_and_strat_runs(timeframed_data, bt_request, **kwargs):
     live_run_indicators = get_live_run_indicators(bt_request, kwargs)
     live_run_aliases = [indicator.alias for indicator in live_run_indicators]
     timeframed_run_results = get_timeframed_run_results(timeframed_data, live_run_indicators)
@@ -245,16 +255,27 @@ def get_pf(timeframed_data, bt_request, **kwargs):
         exit_string = exit_string.replace(key, str(value))
 
     indicator_run_results = {}
-    indicator_run_objects = {}
+    indicator_strat_runs = {}
+    indicator_aliases_added = set()
     for timeframe, indicator_results in timeframed_run_results.items():
         for indicator_alias, run_results in indicator_results.items():
             for run_value, run_result in run_results.items():
                 key_val = f'{indicator_alias}.{run_value}'
                 indicator_run_results[key_val] = run_result['shaped_run_result']
-                indicator_run_objects[key_val] = get_strat_run(indicator_alias=indicator_alias,
-                                                               indicator_run_object=run_result['indicator_run_object'],
-                                                               y_val=run_result['y_val'],
-                                                               bt_request_indicators=bt_request.indicators)
+                if bt_request.get_visuals_html:
+                    add_conditions = [
+                        indicator_alias in entry_string,
+                        indicator_alias in exit_string,
+                    ]
+                    if any(add_conditions) and indicator_alias not in indicator_aliases_added:
+                        indicator_strat_runs[key_val] = get_strat_run(indicator_alias=indicator_alias,
+                                                                      indicator_run_object=run_result[
+                                                                          'indicator_run_object'],
+                                                                      run_value=run_value,
+                                                                      data=timeframed_data[timeframe],
+                                                                      shaped_run_result=run_result['shaped_run_result'],
+                                                                      bt_request_indicators=bt_request.indicators)
+                        indicator_aliases_added.add(indicator_alias)
 
     entry_string = format_action_string(entry_string, indicator_aliases=live_run_aliases,
                                         indicator_run_results=indicator_run_results)
@@ -273,7 +294,7 @@ def get_pf(timeframed_data, bt_request, **kwargs):
     pf = vbt.Portfolio.from_signals(fastest_timeframed_data, entries=entries, exits=exits,
                                     freq=fastest_timeframe)
 
-    return pf
+    return pf, indicator_strat_runs
 
     # todo - get fee, slippage and stops from kwargs else default
     # todo - delete stops that are 0 or negative from new pf run_kwargs - still to be built

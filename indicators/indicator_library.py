@@ -3,6 +3,29 @@ import vectorbtpro as vbt
 from engine.data.data_manager import convert_std_timeframe_to_pandas_timeframe, reshape_slow_timeframe_data_to_fast
 from indicators.indicator_run_caching import get_cached_indicator_run_result, cache_indicator_run_result
 
+
+def get_chart_options_value(indicator, data, run_value, shaped_run_result, option: str):
+    if option not in ['style', 'y_val', 'add_to_orders']:
+        raise ValueError(f'Invalid option: {option}')
+
+    if option in ['style', 'add_to_orders']:
+        return indicator_library[indicator]['chart_options'][option][run_value]
+
+    if option == 'y_val':
+        if indicator_library[indicator]['chart_options'][option][run_value] == 'self':
+            return shaped_run_result
+        elif indicator_library[indicator]['chart_options'][option][run_value] in ['close', 'open', 'high',
+                                                                                  'low', 'volume']:
+            return eval(f"data.{indicator_library[indicator]['chart_options'][option][run_value]}")
+        else:
+            raise ValueError(f'Invalid value for y_val_types: '
+                             f'{indicator_library[indicator]["chart_options"][option][run_value]}')
+
+    else:
+        raise ValueError(f'Invalid option: {option}')
+
+
+
 indicator_library = {
     'adx': {'vbt_indicator': vbt.IF.get_indicator('talib:ADX'),
             'default_value': 'real',
@@ -12,10 +35,14 @@ indicator_library = {
     'bbands': {'vbt_indicator': vbt.IF.get_indicator('vbt:BBANDS'),
                'default_value': 'bandwidth',
                'avlbl_values': ['lower', 'middle', 'upper', 'bandwidth'],
-               'chart_style': {'lower': 'pure', 'middle': 'pure', 'upper': 'pure', 'bandwidth': 'raw'},
-               'chart_y_vals': {'lower': 'close', 'middle': 'close', 'upper': 'close', 'bandwidth': 'self'},
                'data_run_params': ['close'],
                'run_kwargs': {'alpha': 2, 'window': 20}},
+                'chart_options': {
+                    'style': {'lower': 'pure', 'middle': 'pure', 'upper': 'pure', 'bandwidth': 'raw'},
+                    'y_val': {'lower': 'close', 'middle': 'close', 'upper': 'close', 'bandwidth': 'self'},
+                    'add_to_orders': {'lower': True, 'middle': True, 'upper': True, 'bandwidth': False},
+
+                },
     'mfi': {'vbt_indicator': vbt.IF.get_indicator('talib:MFI'),
             'default_value': 'real',
             'avlbl_values': ['real'],
@@ -35,7 +62,13 @@ indicator_library = {
              'default_value': 'hist',
              'avlbl_values': ['macd', 'signal', 'hist'],
              'data_run_params': ['close'],
-             'run_kwargs': {'fast_window': 12, 'slow_window': 26, 'signal_window': 9}},
+             'run_kwargs': {'fast_window': 12, 'slow_window': 26, 'signal_window': 9},
+             'chart_options': {
+                 'style': {'macd': 'pure', 'signal': 'pure', 'hist': 'pure'},
+                 'y_val': {'macd': 'self', 'signal': 'self', 'hist': 'self'},
+                 'add_to_orders': {'macd': False, 'signal': False, 'hist': False},
+             },
+             },
     'ema': {'vbt_indicator': vbt.IF.get_indicator('talib:EMA'),
             'default_value': 'real',
             'avlbl_values': ['real'],
@@ -50,7 +83,13 @@ indicator_library = {
            'default_value': 'ma',
            'avlbl_values': ['ma'],
            'data_run_params': ['close'],
-           'run_kwargs': {'window': 30}},
+           'run_kwargs': {'window': 30},
+           'chart_options': {
+               'style': {'ma': 'pure'},
+               'y_val': {'ma': 'close'},
+               'add_to_orders': {'ma': True},
+           },
+           },
 }
 
 
