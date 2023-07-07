@@ -119,100 +119,79 @@ def run_study(bt_request: BtRequest):
     kwargs_to_add = [renamed_indicators]
     kwargs_to_add.append(bt_request.custom_ranges)
 
-    use_optuna = True
-    if use_optuna:
-        study_name = 'cool_study12'
-        # storage = "sqlite:///{}.db".format(study_name)
-        study = optuna.create_study(study_name=study_name, direction='maximize')
+    study_name = 'cool_study12'
+    # storage = "sqlite:///{}.db".format(study_name)
+    study = optuna.create_study(study_name=study_name, direction='maximize')
 
-        def objective(trial):
-            run_kwargs = {}
-
-            for kwargs_set in kwargs_to_add:
-                for key, value in kwargs_set.items():
-                    if not isinstance(value, list):
-                        run_kwargs[key] = value
-                        continue
-
-                    suggested_value = round(get_suggested_value(trial, suggestion_key=key, value=value), 5)
-
-                    run_kwargs[key] = suggested_value
-
-            if bt_request.sl_stop:
-                if isinstance(bt_request.sl_stop, list):
-                    run_kwargs['sl_stop'] = round(get_suggested_value(trial, suggestion_key='sl_stop',
-                                                                      value=bt_request.sl_stop), 5)
-                else:
-                    run_kwargs['sl_stop'] = bt_request.sl_stop
-
-            if bt_request.tp_stop:
-                if isinstance(bt_request.tp_stop, list):
-                    run_kwargs['tp_stop'] = round(get_suggested_value(trial, suggestion_key='tp_stop',
-                                                                      value=bt_request.tp_stop), 5)
-                else:
-                    run_kwargs['tp_stop'] = bt_request.tp_stop
-
-            if bt_request.tsl_stop:
-                if isinstance(bt_request.tsl_stop, list):
-                    run_kwargs['tsl_stop'] = round(get_suggested_value(trial, suggestion_key='tsl_stop',
-                                                                       value=bt_request.tsl_stop), 5)
-                else:
-                    run_kwargs['tsl_stop'] = bt_request.tsl_stop
-
-            if bt_request.fee:
-                run_kwargs['fee'] = bt_request.fee
-
-            if bt_request.slippage:
-                run_kwargs['slippage'] = bt_request.slippage
-
-            pf, strat_runs = get_pf_and_strat_runs(timeframed_data, bt_request=bt_request, **run_kwargs)
-            trial.set_user_attr('pf', pf)
-            trial.set_user_attr('strat_runs', strat_runs)
-
-            if isnan(pf.sharpe_ratio):
-                return -100000
-
-            if bt_request.objective_value == 'sharpe_ratio':
-                return pf.sharpe_ratio.values[0]
-            elif bt_request.objective_value == 'total_return':
-                return pf.total_return.values[0]
-            else:
-                raise ValueError(f'Invalid objective value: {bt_request.objective_value}')
-
-        study.optimize(objective, n_trials=bt_request.n_trials)
-        clear_indicator_run_cache()
-
-        return study
-
-    '''else:
+    def std_objective(trial):
         run_kwargs = {}
 
-        for rest_indicator in bt_request.indicators:
-            if rest_indicator.run_kwargs:
-                for key, value in rest_indicator.run_kwargs.items():
-                    run_kwargs[f'{rest_indicator.alias}__{key}'] = vbt.Param(value)
+        for kwargs_set in kwargs_to_add:
+            for key, value in kwargs_set.items():
+                if not isinstance(value, list):
+                    run_kwargs[key] = value
+                    continue
 
-        if bt_request.custom_ranges:
-            for key, value in bt_request.custom_ranges.items():
-                run_kwargs[key] = vbt.Param(value)
+                suggested_value = round(get_suggested_value(trial, suggestion_key=key, value=value), 5)
+
+                run_kwargs[key] = suggested_value
 
         if bt_request.sl_stop:
-            run_kwargs['sl_stop'] = vbt.Param(bt_request.sl_stop)
+            if isinstance(bt_request.sl_stop, list):
+                run_kwargs['sl_stop'] = round(get_suggested_value(trial, suggestion_key='sl_stop',
+                                                                  value=bt_request.sl_stop), 5)
+            else:
+                run_kwargs['sl_stop'] = bt_request.sl_stop
 
         if bt_request.tp_stop:
-            run_kwargs['tp_stop'] = vbt.Param(bt_request.tp_stop)
+            if isinstance(bt_request.tp_stop, list):
+                run_kwargs['tp_stop'] = round(get_suggested_value(trial, suggestion_key='tp_stop',
+                                                                  value=bt_request.tp_stop), 5)
+            else:
+                run_kwargs['tp_stop'] = bt_request.tp_stop
 
         if bt_request.tsl_stop:
-            run_kwargs['tsl_stop'] = vbt.Param(bt_request.tsl_stop)
+            if isinstance(bt_request.tsl_stop, list):
+                run_kwargs['tsl_stop'] = round(get_suggested_value(trial, suggestion_key='tsl_stop',
+                                                                   value=bt_request.tsl_stop), 5)
+            else:
+                run_kwargs['tsl_stop'] = bt_request.tsl_stop
 
         if bt_request.fee:
-            run_kwargs['fee'] = vbt.Param(bt_request.fee)
+            run_kwargs['fee'] = bt_request.fee
 
         if bt_request.slippage:
-            run_kwargs['slippage'] = vbt.Param(bt_request.slippage)
+            run_kwargs['slippage'] = bt_request.slippage
 
-        r = get_pf(timeframed_data, bt_request=bt_request, **run_kwargs)  # todo <- this will need to be paramaterized
-    '''
+        pf, strat_runs = get_pf_and_strat_runs(timeframed_data, bt_request=bt_request, **run_kwargs)
+        trial.set_user_attr('pf', pf)
+        trial.set_user_attr('strat_runs', strat_runs)
+
+        if isnan(pf.sharpe_ratio):
+            return -100000
+
+        if bt_request.objective_value == 'sharpe_ratio':
+            return pf.sharpe_ratio.values[0]
+        elif bt_request.objective_value == 'total_return':
+            return pf.total_return.values[0]
+        else:
+            raise ValueError(f'Invalid objective value: {bt_request.objective_value}')
+
+    def cv_objective():
+        # Build a splitter
+        # Loop through splitters splits
+        # Start at 1, for every odd (train), run the study and pick best result
+        # Then get the best params of that study and run against the test data
+        # save results of best param results in train and results of test in a single DF
+        ...
+
+
+
+    study.optimize(std_objective, n_trials=bt_request.n_trials)
+    clear_indicator_run_cache()
+
+    return study
+
 
 
 def get_indicator_from_alias(alias: str, rest_indicators):
