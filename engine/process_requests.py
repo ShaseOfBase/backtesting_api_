@@ -106,6 +106,42 @@ def get_timeframed_run_results(timeframed_data, rest_indicators):
     return timeframed_run_results
 
 
+def get_trial_kwargs(trial, kwargs_to_add, bt_request):
+    trial_kwargs = {}
+
+    for kwargs_set in kwargs_to_add:
+        for key, value in kwargs_set.items():
+            if not isinstance(value, list):
+                trial_kwargs[key] = value
+                continue
+
+            suggested_value = round(get_suggested_value(trial, suggestion_key=key, value=value), 5)
+
+            trial_kwargs[key] = suggested_value
+
+    if bt_request.sl_stop:
+        if isinstance(bt_request.sl_stop, list):
+            trial_kwargs['sl_stop'] = round(get_suggested_value(trial, suggestion_key='sl_stop',
+                                                               value=bt_request.sl_stop), 5)
+        else:
+            trial_kwargs['sl_stop'] = bt_request.sl_stop
+
+    if bt_request.tp_stop:
+        if isinstance(bt_request.tp_stop, list):
+            trial_kwargs['tp_stop'] = round(get_suggested_value(trial, suggestion_key='tp_stop',
+                                                               value=bt_request.tp_stop), 5)
+        else:
+            trial_kwargs['tp_stop'] = bt_request.tp_stop
+
+    if bt_request.fee:
+        trial_kwargs['fee'] = bt_request.fee
+
+    if bt_request.slippage:
+        trial_kwargs['slippage'] = bt_request.slippage
+
+    return trial_kwargs
+
+
 def run_study(bt_request: BtRequest):
     timeframed_data = fetch_datas(source=bt_request.source,
                                   symbol=bt_request.symbol,
@@ -123,47 +159,10 @@ def run_study(bt_request: BtRequest):
     kwargs_to_add = [renamed_indicators]
     kwargs_to_add.append(bt_request.custom_ranges)
 
-    def std_objective(trial):
-        run_kwargs = {}
+    def std_objective(trial, action_data):
+        run_kwargs = get_trial_kwargs(trial=trial, kwargs_to_add=kwargs_to_add, bt_request=bt_request)
 
-        for kwargs_set in kwargs_to_add:
-            for key, value in kwargs_set.items():
-                if not isinstance(value, list):
-                    run_kwargs[key] = value
-                    continue
-
-                suggested_value = round(get_suggested_value(trial, suggestion_key=key, value=value), 5)
-
-                run_kwargs[key] = suggested_value
-
-        if bt_request.sl_stop:
-            if isinstance(bt_request.sl_stop, list):
-                run_kwargs['sl_stop'] = round(get_suggested_value(trial, suggestion_key='sl_stop',
-                                                                  value=bt_request.sl_stop), 5)
-            else:
-                run_kwargs['sl_stop'] = bt_request.sl_stop
-
-        if bt_request.tp_stop:
-            if isinstance(bt_request.tp_stop, list):
-                run_kwargs['tp_stop'] = round(get_suggested_value(trial, suggestion_key='tp_stop',
-                                                                  value=bt_request.tp_stop), 5)
-            else:
-                run_kwargs['tp_stop'] = bt_request.tp_stop
-
-        if bt_request.tsl_stop:
-            if isinstance(bt_request.tsl_stop, list):
-                run_kwargs['tsl_stop'] = round(get_suggested_value(trial, suggestion_key='tsl_stop',
-                                                                   value=bt_request.tsl_stop), 5)
-            else:
-                run_kwargs['tsl_stop'] = bt_request.tsl_stop
-
-        if bt_request.fee:
-            run_kwargs['fee'] = bt_request.fee
-
-        if bt_request.slippage:
-            run_kwargs['slippage'] = bt_request.slippage
-
-        pf, strat_runs = get_pf_and_strat_runs(timeframed_data, bt_request=bt_request, **run_kwargs)
+        pf, strat_runs = get_pf_and_strat_runs(action_data, bt_request=bt_request, **run_kwargs)
         trial.set_user_attr('pf', pf)
         trial.set_user_attr('strat_runs', strat_runs)
 
@@ -177,11 +176,12 @@ def run_study(bt_request: BtRequest):
         else:
             raise ValueError(f'Invalid objective value: {bt_request.objective_value}')
 
-    study_name = 'cool_study12'
-    study = optuna.create_study(study_name=study_name, direction='maximize')
     if not bt_request.cross_validate:
+        study_name = 'cool_study12'
+        study = optuna.create_study(study_name=study_name, direction='maximize')
         # storage = "sqlite:///{}.db".format(study_name)
         study.optimize(std_objective, n_trials=bt_request.n_trials)
+
     else:
         fastest_timeframe_data, _ = get_fastest_timeframe_data(timeframed_data)
         splitter = get_default_splitter(fastest_timeframe_data.index)
@@ -191,12 +191,23 @@ def run_study(bt_request: BtRequest):
         for row in splitter.splits.to_dict('records'):
             train_slice = row['train']
             test_slice = row['test']
+            train_data = {}
+            test_data = {}
+            for timeframe, timeframe_data in timeframed_data.items():
+                train_data[timeframe] = timeframe_data[train_slice]
+                test_data[timeframe] = timeframe_data[test_slice]
 
-        # Start at 1, for every odd (train), run the study
-        # Then get the best params of that study and run against the test data
-        # Repeat through all splits
+            train_study = optuna.create_study(direction='maximize')
+            train_study.optimize(lambda trial: std_objective(trial, action_data=train_data), n_trials=15)
+
+            test_study = optuna.create_study(direction='maximize')
+            test_study.optimize(lambda trial: std_objective(trial, action_data=test_data), n_trials=15)
+            actual_test_result, strat_runs = get_pf_and_strat_runs(test_data,
+                                                                   bt_request=bt_request,
+                                                                   **test_study.best_params)
+            # todo compare actual test result to best result from test_study
+
         # save results of best param results in train and results of test in a single DF
-
 
     clear_indicator_run_cache()
 
@@ -284,5 +295,4 @@ def get_pf_and_strat_runs(timeframed_data, bt_request, **kwargs):
 
     return pf, indicator_strat_runs
 
-    # todo - get fee, slippage and stops from kwargs else default
     # todo - delete stops that are 0 or negative from new pf run_kwargs - still to be built
