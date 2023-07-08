@@ -3,6 +3,8 @@ from collections import defaultdict
 import pandas as pd
 import numpy as np
 import vectorbtpro as vbt
+from sklearn.model_selection import KFold
+
 from backtesting.decorators import std_parameterized
 from engine.data.data_manager import fetch_datas, get_fastest_timeframe_data, reshape_slow_timeframe_data_to_fast
 from engine.optuna_processing import get_suggested_value
@@ -11,6 +13,8 @@ from indicators.indicator_library import indicator_library, get_indicator_key_va
 from indicators.indicator_run_caching import clear_indicator_run_cache
 from models import BtRequest, StratRun
 import optuna
+
+from splitters.splitter_definitions import get_default_splitter
 
 
 def get_live_run_indicators(bt_request, kwargs):
@@ -119,10 +123,6 @@ def run_study(bt_request: BtRequest):
     kwargs_to_add = [renamed_indicators]
     kwargs_to_add.append(bt_request.custom_ranges)
 
-    study_name = 'cool_study12'
-    # storage = "sqlite:///{}.db".format(study_name)
-    study = optuna.create_study(study_name=study_name, direction='maximize')
-
     def std_objective(trial):
         run_kwargs = {}
 
@@ -177,21 +177,30 @@ def run_study(bt_request: BtRequest):
         else:
             raise ValueError(f'Invalid objective value: {bt_request.objective_value}')
 
-    def cv_objective():
-        # Build a splitter
-        # Loop through splitters splits
-        # Start at 1, for every odd (train), run the study and pick best result
+    study_name = 'cool_study12'
+    study = optuna.create_study(study_name=study_name, direction='maximize')
+    if not bt_request.cross_validate:
+        # storage = "sqlite:///{}.db".format(study_name)
+        study.optimize(std_objective, n_trials=bt_request.n_trials)
+    else:
+        fastest_timeframe_data, _ = get_fastest_timeframe_data(timeframed_data)
+        splitter = get_default_splitter(fastest_timeframe_data.index)
+        # Apply splitter to data
+        splits = splitter.splits
+
+        for row in splitter.splits.to_dict('records'):
+            train_slice = row['train']
+            test_slice = row['test']
+
+        # Start at 1, for every odd (train), run the study
         # Then get the best params of that study and run against the test data
+        # Repeat through all splits
         # save results of best param results in train and results of test in a single DF
-        ...
 
 
-
-    study.optimize(std_objective, n_trials=bt_request.n_trials)
     clear_indicator_run_cache()
 
-    return study
-
+    return study  # todo <- return something more neutral than study to include CV study...?
 
 
 def get_indicator_from_alias(alias: str, rest_indicators):

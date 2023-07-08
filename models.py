@@ -102,7 +102,7 @@ class BtRequest(json.JSONEncoder):
     n_trials: Optional[int] = 10
     objective_value: Optional[str] = 'sharpe_ratio'
     parameter_merge: Optional[str] = 'concat'
-    cross_validation: Optional[str] = 'none'
+    cross_validate: Optional[str] = 'none'
     get_visuals_html: Optional[bool] = False
     source: str = 'binance'
     direction: str = 'long' # 'short | long | both'
