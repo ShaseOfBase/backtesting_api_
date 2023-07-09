@@ -8,10 +8,11 @@ from sklearn.model_selection import KFold
 from backtesting.decorators import std_parameterized
 from engine.data.data_manager import fetch_datas, get_fastest_timeframe_data, reshape_slow_timeframe_data_to_fast
 from engine.optuna_processing import get_suggested_value
+from engine.process_study_result import get_standard_result_from_study, get_html_pf_plot, get_signal_dict_from_pf
 from indicators.indicator_library import indicator_library, get_indicator_key_value, get_indicator_run_results, \
     get_chart_options_value
 from indicators.indicator_run_caching import clear_indicator_run_cache
-from models import BtRequest, StratRun
+from models import BtRequest, StratRun, CvResult
 import optuna
 
 from splitters.splitter_definitions import get_default_splitter
@@ -122,14 +123,14 @@ def get_trial_kwargs(trial, kwargs_to_add, bt_request):
     if bt_request.sl_stop:
         if isinstance(bt_request.sl_stop, list):
             trial_kwargs['sl_stop'] = round(get_suggested_value(trial, suggestion_key='sl_stop',
-                                                               value=bt_request.sl_stop), 5)
+                                                                value=bt_request.sl_stop), 5)
         else:
             trial_kwargs['sl_stop'] = bt_request.sl_stop
 
     if bt_request.tp_stop:
         if isinstance(bt_request.tp_stop, list):
             trial_kwargs['tp_stop'] = round(get_suggested_value(trial, suggestion_key='tp_stop',
-                                                               value=bt_request.tp_stop), 5)
+                                                                value=bt_request.tp_stop), 5)
         else:
             trial_kwargs['tp_stop'] = bt_request.tp_stop
 
@@ -140,6 +141,40 @@ def get_trial_kwargs(trial, kwargs_to_add, bt_request):
         trial_kwargs['slippage'] = bt_request.slippage
 
     return trial_kwargs
+
+
+def get_pf_objective_value(pf, objective_value):
+    if objective_value == 'sharpe':
+        return pf.sharpe_ratio()
+    elif objective_value == 'sortino':
+        return pf.sortino_ratio()
+    elif objective_value == 'calmar':
+        return pf.calmar_ratio()
+    elif objective_value == 'omega':
+        return pf.omega_ratio()
+    elif objective_value == 'max_drawdown':
+        return pf.max_drawdown()
+    elif objective_value == 'total_return':
+        return pf.total_return()
+    else:
+        raise ValueError(f'Objective value {objective_value} not recognized')  # todo <- add all pf.stats values here
+
+
+def get_direction_from_objective_value(objective_value):
+    if objective_value == 'sharpe':
+        return 'max'
+    elif objective_value == 'sortino':
+        return 'max'
+    elif objective_value == 'calmar':
+        return 'max'
+    elif objective_value == 'omega':
+        return 'max'
+    elif objective_value == 'max_drawdown':
+        return 'min'
+    elif objective_value == 'total_return':
+        return 'max'
+    else:
+        raise ValueError(f'Objective value {objective_value} not recognized')  # todo <- add all pf.stats values here
 
 
 def run_study(bt_request: BtRequest):
@@ -178,9 +213,11 @@ def run_study(bt_request: BtRequest):
 
     if not bt_request.cross_validate:
         study_name = 'cool_study12'
-        study = optuna.create_study(study_name=study_name, direction='maximize')
+        study = optuna.create_study(study_name=study_name)
         # storage = "sqlite:///{}.db".format(study_name)
-        study.optimize(std_objective, n_trials=bt_request.n_trials)
+        study.optimize(std_objective, n_trials=bt_request.n_trials,
+                       direction=get_direction_from_objective_value(bt_request.objective_value))
+        return get_standard_result_from_study(study=study, bt_request=bt_request)
 
     else:
         fastest_timeframe_data, _ = get_fastest_timeframe_data(timeframed_data)
@@ -188,6 +225,12 @@ def run_study(bt_request: BtRequest):
         # Apply splitter to data
         splits = splitter.splits
 
+        train_studies = []
+        test_studies = []
+        study_direction = get_direction_from_objective_value(bt_request.objective_value)
+        cv_results = []
+        actual_test_result_pfs = []
+        actual_test_result_strat_runs = []
         for row in splitter.splits.to_dict('records'):
             train_slice = row['train']
             test_slice = row['test']
@@ -198,20 +241,45 @@ def run_study(bt_request: BtRequest):
                 test_data[timeframe] = timeframe_data[test_slice]
 
             train_study = optuna.create_study(direction='maximize')
-            train_study.optimize(lambda trial: std_objective(trial, action_data=train_data), n_trials=15)
+            train_study.optimize(lambda trial: std_objective(trial, action_data=train_data),
+                                 n_trials=bt_request.n_trials,
+                                 direction=study_direction)
+            train_studies.append(train_study)
 
             test_study = optuna.create_study(direction='maximize')
-            test_study.optimize(lambda trial: std_objective(trial, action_data=test_data), n_trials=15)
-            actual_test_result, strat_runs = get_pf_and_strat_runs(test_data,
-                                                                   bt_request=bt_request,
-                                                                   **test_study.best_params)
-            # todo compare actual test result to best result from test_study
+            test_study.optimize(lambda trial: std_objective(trial, action_data=test_data),
+                                n_trials=bt_request.n_trials,
+                                direction=study_direction)
+            test_studies.append(test_study)
 
-        # save results of best param results in train and results of test in a single DF
+            actual_test_result_pf, strat_runs = get_pf_and_strat_runs(test_data,
+                                                                      bt_request=bt_request,
+                                                                      **test_study.best_params)
+            actual_test_result_pfs.append(actual_test_result_pf)
+            actual_test_result_strat_runs.append(strat_runs)
 
-    clear_indicator_run_cache()
+            cv_results.append({
+                'train_best': train_study.best_value,
+                'test_best': test_study.best_value,
+                'test_actual': get_pf_objective_value(actual_test_result_pf, bt_request.objective_value),
+                'train_best_params': train_study.best_params,
+                'test_best_params': test_study.best_params,
+            })
 
-    return study  # todo <- return something more neutral than study to include CV study...?
+        cv_df = pd.DataFrame(cv_results)
+
+        final_test_actual_pf = actual_test_result_pfs[-1]
+        final_test_actual_strat_run = actual_test_result_strat_runs[-1]
+
+        signal_dict = get_signal_dict_from_pf(final_test_actual_pf, bt_request.get_signal)
+
+        clear_indicator_run_cache()
+
+        return CvResult(cv_df=cv_df,
+                        final_test_best_pf=test_studies[-1].best_trial.user_attrs['pf'],
+                        final_test_actual_pf=final_test_actual_pf,
+                        final_test_visuals_html=get_html_pf_plot(final_test_actual_pf, final_test_actual_strat_run),
+                        signal=signal_dict)
 
 
 def get_indicator_from_alias(alias: str, rest_indicators):

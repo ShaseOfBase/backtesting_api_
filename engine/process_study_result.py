@@ -3,10 +3,29 @@ from pathlib import Path
 
 import numpy as np
 import vectorbtpro as vbt
-from models import AssessmentResult, BtRequest
+from models import StandardResult, BtRequest
 
 
-def get_assessment_result_from_study(study, bt_request: BtRequest) -> AssessmentResult:
+
+def get_signal_dict_from_pf(pf: vbt.Portfolio, get_signal) -> dict:
+    order_records_df = pf.orders.records_readable
+    signal_order = order_records_df.iloc[-1]
+
+    if get_signal:
+        return {
+            'value': signal_order['Side'],
+            'price': signal_order['Price'],
+            'datetime': signal_order['Signal Index']
+        }
+    else:
+        return {
+            'value': None,
+            'price': None,
+            'datetime': None
+        }
+
+
+def get_standard_result_from_study(study, bt_request: BtRequest) -> StandardResult:
 
     optuna_df = study.trials_dataframe()
     best_trial = study.best_trial
@@ -16,21 +35,7 @@ def get_assessment_result_from_study(study, bt_request: BtRequest) -> Assessment
     best_trial_pf = best_trial.user_attrs['pf']
     best_trial_pf_stats = best_trial_pf.stats()
 
-    if bt_request.get_signal:
-        order_records_df = best_trial_pf.orders.records_readable
-        signal_order = order_records_df.iloc[-1]
-
-        signal_dict = {
-            'value': signal_order['Side'],
-            'price': signal_order['Price'],
-            'datetime': signal_order['Signal Index']
-        }
-    else:
-        signal_dict = {
-            'value': None,
-            'price': None,
-            'datetime': None
-        }
+    signal_dict = get_signal_dict_from_pf(best_trial_pf, bt_request.get_signal)
 
     if bt_request.get_visuals_html:
         strat_runs_dict = best_trial.user_attrs['strat_runs']
@@ -42,12 +47,12 @@ def get_assessment_result_from_study(study, bt_request: BtRequest) -> Assessment
     else:
         best_trial_pf_visuals_html = None
 
-    return AssessmentResult(optuna_df=optuna_df,
-                            best_params=best_params,
-                            best_objective_value=best_objective_value,
-                            best_trial_pf_stats=best_trial_pf_stats,
-                            best_trial_pf_visuals_html=best_trial_pf_visuals_html,
-                            signal=signal_dict)
+    return StandardResult(optuna_df=optuna_df,
+                          best_params=best_params,
+                          best_objective_value=best_objective_value,
+                          best_trial_pf_stats=best_trial_pf_stats,
+                          best_trial_pf_visuals_html=best_trial_pf_visuals_html,
+                          signal=signal_dict)
 
 
 def get_html_pf_plot(pf: vbt.Portfolio, strat_runs_dict: dict) -> str:

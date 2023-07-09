@@ -1,5 +1,5 @@
 from engine.process_requests import run_study
-from engine.process_study_result import get_assessment_result_from_study
+from engine.process_study_result import get_standard_result_from_study
 from indicators.indicator_data import get_indicator_data
 from main import app
 import pandas as pd
@@ -14,7 +14,7 @@ async def root():
 @app.post("/bt")
 async def say_hello(bt_request: BtRequest):
     study = run_study(bt_request)
-    study_results = get_assessment_result_from_study(study, bt_request)
+    study_results = get_standard_result_from_study(study, bt_request)
 
     return {"message": f"Hello world"}
 

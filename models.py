@@ -197,7 +197,17 @@ class IndicatorDataRequest(json.JSONEncoder):
 
 
 @dataclass
-class AssessmentResult:
+class CvResult:
+    '''Consists of multiple study results and test results'''
+    cv_df: pd.DataFrame
+    final_test_best_pf: vbt.Portfolio
+    final_test_actual_pf: pd.DataFrame
+    final_test_visuals_html: str
+    signal: Optional[dict] = None
+
+
+@dataclass
+class StandardResult:
     optuna_df: pd.DataFrame
     best_params: dict
     best_objective_value: float
