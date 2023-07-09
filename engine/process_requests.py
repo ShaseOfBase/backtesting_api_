@@ -223,7 +223,6 @@ def run_study(bt_request: BtRequest):
         fastest_timeframe_data, _ = get_fastest_timeframe_data(timeframed_data)
         splitter = get_default_splitter(fastest_timeframe_data.index)
         # Apply splitter to data
-        splits = splitter.splits
 
         train_studies = []
         test_studies = []
@@ -231,6 +230,7 @@ def run_study(bt_request: BtRequest):
         cv_results = []
         actual_test_result_pfs = []
         actual_test_result_strat_runs = []
+        
         for row in splitter.splits.to_dict('records'):
             train_slice = row['train']
             test_slice = row['test']
