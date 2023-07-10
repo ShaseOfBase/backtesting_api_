@@ -13,8 +13,7 @@ async def root():
 
 @app.post("/bt")
 async def say_hello(bt_request: BtRequest):
-    study = run_study(bt_request)
-    study_results = get_standard_result_from_study(study, bt_request)
+    processed_result = run_study(bt_request)
 
     return {"message": f"Hello world"}
 

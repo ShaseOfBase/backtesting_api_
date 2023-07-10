@@ -17,13 +17,13 @@ def test_bt_request():
                                indicator='ma',
                                timeframe='1d',
                                normalize=True,
-                               run_kwargs=dict(window=[10, 15]))
+                               run_kwargs=dict(window=[10, 20]))
 
     ri_ma_slow = RestIndicator(alias='slow_ma',
                                indicator='ma',
                                timeframe='1d',
                                normalize=True,
-                               run_kwargs=dict(window=[30, 50]))
+                               run_kwargs=dict(window=[25, 70]))
 
     ri_macd = RestIndicator(alias='fast_macd',
                             indicator='macd',  # possible values are hist, macd, signal
@@ -34,11 +34,12 @@ def test_bt_request():
     bt_request = BtRequest(symbol='BTCUSDT',
                            testing_period=tp,
                            indicators=[ri_ma_slow, ri_macd, ri_ma_fast],
-                           custom_ranges=dict(macd_hist_long=[-0.5, 0.5]),
+                           custom_ranges=dict(macd_hist_long=[-1, 1]),
                            entries='(fast_macd.hist >= macd_hist_long)',
                            exits='fast_macd.hist < 0',
-                           n_trials=100,
-                           get_visuals_html=True)
+                           n_trials=50,
+                           get_visuals_html=True,
+                           cross_validate='standard')
 
     response = client.post("/bt", data=bt_request.to_json())
     assert response.status_code == 200

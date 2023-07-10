@@ -1,10 +1,8 @@
 from datetime import datetime
 from pathlib import Path
-
 import numpy as np
 import vectorbtpro as vbt
 from models import StandardResult, BtRequest
-
 
 
 def get_signal_dict_from_pf(pf: vbt.Portfolio, get_signal) -> dict:

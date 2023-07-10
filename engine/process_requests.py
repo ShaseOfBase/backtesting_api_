@@ -144,35 +144,35 @@ def get_trial_kwargs(trial, kwargs_to_add, bt_request):
 
 
 def get_pf_objective_value(pf, objective_value):
-    if objective_value == 'sharpe':
-        return pf.sharpe_ratio()
+    if objective_value == 'sharpe_ratio':
+        return pf.sharpe_ratio.iloc[0]
     elif objective_value == 'sortino':
-        return pf.sortino_ratio()
+        return pf.sortino_ratio.iloc[0]
     elif objective_value == 'calmar':
-        return pf.calmar_ratio()
+        return pf.calmar_ratio.iloc[0]
     elif objective_value == 'omega':
-        return pf.omega_ratio()
+        return pf.omega_ratio.iloc[0]
     elif objective_value == 'max_drawdown':
-        return pf.max_drawdown()
+        return pf.max_drawdown.iloc[0]
     elif objective_value == 'total_return':
-        return pf.total_return()
+        return pf.total_return.iloc[0] * 100
     else:
         raise ValueError(f'Objective value {objective_value} not recognized')  # todo <- add all pf.stats values here
 
 
 def get_direction_from_objective_value(objective_value):
-    if objective_value == 'sharpe':
-        return 'max'
+    if objective_value == 'sharpe_ratio':
+        return 'maximize'
     elif objective_value == 'sortino':
-        return 'max'
+        return 'maximize'
     elif objective_value == 'calmar':
-        return 'max'
+        return 'maximize'
     elif objective_value == 'omega':
-        return 'max'
+        return 'maximize'
     elif objective_value == 'max_drawdown':
-        return 'min'
+        return 'minimize'
     elif objective_value == 'total_return':
-        return 'max'
+        return 'maximize'
     else:
         raise ValueError(f'Objective value {objective_value} not recognized')  # todo <- add all pf.stats values here
 
@@ -201,7 +201,7 @@ def run_study(bt_request: BtRequest):
         trial.set_user_attr('pf', pf)
         trial.set_user_attr('strat_runs', strat_runs)
 
-        if isnan(pf.sharpe_ratio):
+        if isnan(pf.sharpe_ratio.iloc[0]):
             return -100000
 
         if bt_request.objective_value == 'sharpe_ratio':
@@ -220,8 +220,9 @@ def run_study(bt_request: BtRequest):
         return get_standard_result_from_study(study=study, bt_request=bt_request)
 
     else:
-        fastest_timeframe_data, _ = get_fastest_timeframe_data(timeframed_data)
-        splitter = get_default_splitter(fastest_timeframe_data.index)
+        timeframed_splitters = {}
+        for timeframe, timeframe_data in timeframed_data.items():
+            timeframed_splitters[timeframe] = get_default_splitter(timeframe_data.index)
         # Apply splitter to data
 
         train_studies = []
@@ -230,31 +231,30 @@ def run_study(bt_request: BtRequest):
         cv_results = []
         actual_test_result_pfs = []
         actual_test_result_strat_runs = []
-        
-        for row in splitter.splits.to_dict('records'):
-            train_slice = row['train']
-            test_slice = row['test']
+
+        for i in range(len(timeframed_splitters) + 1):
             train_data = {}
             test_data = {}
             for timeframe, timeframe_data in timeframed_data.items():
-                train_data[timeframe] = timeframe_data[train_slice]
-                test_data[timeframe] = timeframe_data[test_slice]
+                timeframed_train_slice = timeframed_splitters[timeframe].splits['train'].iloc[i]
+                timeframed_test_slice = timeframed_splitters[timeframe].splits['test'].iloc[i]
 
-            train_study = optuna.create_study(direction='maximize')
+                train_data[timeframe] = timeframe_data[timeframed_train_slice]
+                test_data[timeframe] = timeframe_data[timeframed_test_slice]
+
+            train_study = optuna.create_study(direction=study_direction)
             train_study.optimize(lambda trial: std_objective(trial, action_data=train_data),
-                                 n_trials=bt_request.n_trials,
-                                 direction=study_direction)
+                                 n_trials=bt_request.n_trials)
             train_studies.append(train_study)
 
-            test_study = optuna.create_study(direction='maximize')
+            test_study = optuna.create_study(direction=study_direction)
             test_study.optimize(lambda trial: std_objective(trial, action_data=test_data),
-                                n_trials=bt_request.n_trials,
-                                direction=study_direction)
+                                n_trials=bt_request.n_trials)
             test_studies.append(test_study)
 
             actual_test_result_pf, strat_runs = get_pf_and_strat_runs(test_data,
                                                                       bt_request=bt_request,
-                                                                      **test_study.best_params)
+                                                                      **train_study.best_params)
             actual_test_result_pfs.append(actual_test_result_pf)
             actual_test_result_strat_runs.append(strat_runs)
 
