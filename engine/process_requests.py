@@ -1,5 +1,8 @@
+from datetime import datetime
 from math import isnan
 from collections import defaultdict
+from pathlib import Path
+
 import pandas as pd
 import numpy as np
 import vectorbtpro as vbt
@@ -12,7 +15,7 @@ from engine.process_study_result import get_standard_result_from_study, get_html
 from indicators.indicator_library import indicator_library, get_indicator_key_value, get_indicator_run_results, \
     get_chart_options_value
 from indicators.indicator_run_caching import clear_indicator_run_cache
-from models import BtRequest, StratRun, CvResult
+from models import BtRequest, StratRun, CvResult, StandardResult
 import optuna
 
 from splitters.splitter_definitions import get_default_splitter
@@ -177,7 +180,7 @@ def get_direction_from_objective_value(objective_value):
         raise ValueError(f'Objective value {objective_value} not recognized')  # todo <- add all pf.stats values here
 
 
-def run_study(bt_request: BtRequest):
+def run_study(bt_request: BtRequest) -> StandardResult | CvResult:
     timeframed_data = fetch_datas(source=bt_request.source,
                                   symbol=bt_request.symbol,
                                   timeframes=[indicator.timeframe for indicator in bt_request.indicators],
@@ -211,12 +214,13 @@ def run_study(bt_request: BtRequest):
         else:
             raise ValueError(f'Invalid objective value: {bt_request.objective_value}')
 
+    study_direction = get_direction_from_objective_value(bt_request.objective_value)
+
     if not bt_request.cross_validate:
         study_name = 'cool_study12'
-        study = optuna.create_study(study_name=study_name)
+        study = optuna.create_study(study_name=study_name, direction=study_direction)
         # storage = "sqlite:///{}.db".format(study_name)
-        study.optimize(std_objective, n_trials=bt_request.n_trials,
-                       direction=get_direction_from_objective_value(bt_request.objective_value))
+        study.optimize(lambda trial: std_objective(trial, action_data=timeframed_data), n_trials=bt_request.n_trials)
         return get_standard_result_from_study(study=study, bt_request=bt_request)
 
     else:
@@ -227,7 +231,7 @@ def run_study(bt_request: BtRequest):
 
         train_studies = []
         test_studies = []
-        study_direction = get_direction_from_objective_value(bt_request.objective_value)
+
         cv_results = []
         actual_test_result_pfs = []
         actual_test_result_strat_runs = []
@@ -255,15 +259,20 @@ def run_study(bt_request: BtRequest):
             actual_test_result_pf, strat_runs = get_pf_and_strat_runs(test_data,
                                                                       bt_request=bt_request,
                                                                       **train_study.best_params)
+            actual_pf_objective_value = get_pf_objective_value(actual_test_result_pf, bt_request.objective_value)
+
             actual_test_result_pfs.append(actual_test_result_pf)
             actual_test_result_strat_runs.append(strat_runs)
 
+            actual_value_equals_best_train_value = actual_pf_objective_value == test_study.best_value
+
             cv_results.append({
                 'train_best': train_study.best_value,
-                'test_best': test_study.best_value,
-                'test_actual': get_pf_objective_value(actual_test_result_pf, bt_request.objective_value),
+                'test_actual': actual_pf_objective_value,
                 'train_best_params': train_study.best_params,
-                'test_best_params': test_study.best_params,
+                'test_best': test_study.best_value,
+                'test_best_params': test_study.best_params if not actual_value_equals_best_train_value
+                else train_study.best_params,
             })
 
         cv_df = pd.DataFrame(cv_results)
@@ -274,6 +283,12 @@ def run_study(bt_request: BtRequest):
         signal_dict = get_signal_dict_from_pf(final_test_actual_pf, bt_request.get_signal)
 
         clear_indicator_run_cache()
+
+        best_trial_pf_visuals_html = get_html_pf_plot(final_test_actual_pf, final_test_actual_strat_run)
+        if __debug__:
+            Path('temp').mkdir(exist_ok=True)  # todo There is a close line operating on daily timeframe for some reason when the rest of the data is the 4h / fastest, try empty strat runs to see where its comign from
+            with open(f'temp/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}_pf_visuals.html', 'wb') as f:
+                f.write(best_trial_pf_visuals_html.encode('utf-8'))
 
         return CvResult(cv_df=cv_df,
                         final_test_best_pf=test_studies[-1].best_trial.user_attrs['pf'],

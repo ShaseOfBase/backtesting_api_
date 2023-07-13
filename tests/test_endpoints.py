@@ -34,12 +34,12 @@ def test_bt_request():
     bt_request = BtRequest(symbol='BTCUSDT',
                            testing_period=tp,
                            indicators=[ri_ma_slow, ri_macd, ri_ma_fast],
-                           custom_ranges=dict(macd_hist_long=[-1, 1]),
+                           custom_ranges=dict(macd_hist_long=[-1, 1.]),
                            entries='(fast_macd.hist >= macd_hist_long)',
                            exits='fast_macd.hist < 0',
                            n_trials=50,
                            get_visuals_html=True,
-                           cross_validate='standard')
+                           cross_validate='sss')
 
     response = client.post("/bt", data=bt_request.to_json())
     assert response.status_code == 200
