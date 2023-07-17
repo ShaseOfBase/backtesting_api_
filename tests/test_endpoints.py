@@ -15,13 +15,13 @@ def test_bt_request():
 
     ri_ma_fast = RestIndicator(alias='fast_ma',
                                indicator='ma',
-                               timeframe='1d',
+                               timeframe='4h',
                                normalize=True,
                                run_kwargs=dict(window=[10, 20]))
 
     ri_ma_slow = RestIndicator(alias='slow_ma',
                                indicator='ma',
-                               timeframe='1d',
+                               timeframe='4h',
                                normalize=True,
                                run_kwargs=dict(window=[25, 70]))
 
@@ -34,9 +34,10 @@ def test_bt_request():
     bt_request = BtRequest(symbol='BTCUSDT',
                            testing_period=tp,
                            indicators=[ri_ma_slow, ri_macd, ri_ma_fast],
-                           custom_ranges=dict(macd_hist_long=[-1, 1.]),
-                           entries='(fast_macd.hist >= macd_hist_long)',
-                           exits='fast_macd.hist < 0',
+                           custom_ranges=dict(macd_hist_long=[-1, 1.],
+                                              diff_diffs=[1, 3]),
+                           entries='(fast_macd.hist#diff.diff_diffs >= macd_hist_long) and (close > slow_ma)',
+                           exits='(fast_macd.hist < 0) or (close < slow_ma)',
                            n_trials=50,
                            get_visuals_html=True,
                            cross_validate='sss')

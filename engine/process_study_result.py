@@ -6,21 +6,21 @@ from models import StandardResult, BtRequest
 
 
 def get_signal_dict_from_pf(pf: vbt.Portfolio, get_signal) -> dict:
-    order_records_df = pf.orders.records_readable
-    signal_order = order_records_df.iloc[-1]
-
     if get_signal:
-        return {
-            'value': signal_order['Side'],
-            'price': signal_order['Price'],
-            'datetime': signal_order['Signal Index']
-        }
-    else:
-        return {
-            'value': None,
-            'price': None,
-            'datetime': None
-        }
+        order_records_df = pf.orders.records_readable
+        if len(order_records_df):
+            signal_order = order_records_df.iloc[-1]
+            return {
+                'value': signal_order['Side'],
+                'price': signal_order['Price'],
+                'datetime': signal_order['Signal Index']
+            }
+
+    return {
+        'value': None,
+        'price': None,
+        'datetime': None
+    }
 
 
 def get_standard_result_from_study(study, bt_request: BtRequest) -> StandardResult:

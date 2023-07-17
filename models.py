@@ -37,7 +37,7 @@ class RestIndicator(json.JSONEncoder):
     alias: str
     indicator: str
     timeframe: str
-    normalize: bool = True
+    normalize: Optional[bool] = True
     run_kwargs: Optional[dict] = None
 
     def to_json(self):
@@ -47,6 +47,13 @@ class RestIndicator(json.JSONEncoder):
         self.indicator = self.indicator.lower()
 
     def is_valid(self):
+        if self.process:
+            if '.' not in self.process:
+                raise ValueError(f'Process {self.process} must contain a dot followed by a value (e.g. diff.3)')
+            process = self.process.split('.')[0]
+            if process not in ['diff', 'mean', 'median']:
+                raise ValueError(f'Process {self.process} not valid, expecting diff, mean or median')
+
         if not self.alias.isalnum():
             raise ValueError(f'Alias {self.alias} must be alphanumeric')
 
@@ -109,6 +116,19 @@ class BtRequest(json.JSONEncoder):
     get_signal: bool = False
 
     def is_valid(self):
+        if '#' in self.entries:
+            for word in self.entries.split():
+                if '#' not in word:
+                    continue
+                split_word = word.split('#')
+
+                if '.' not in split_word[1]:
+                    raise ValueError('Process must be in the format of indicator_alias<.indicator_specifier>'
+                                     '#process.process_len (e.g. my_macd.hist#diff.2)')
+                process = split_word[1].split('.')[0]
+                if process not in ['diff', 'mean', 'median']:
+                    raise ValueError(f'Process {process} not valid, expecting diff, mean or median')
+
         if self.source not in valid_sources:
             raise ValueError(f'Invalid source {self.source}, must be one of {valid_sources}')
 

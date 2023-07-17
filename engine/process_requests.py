@@ -56,6 +56,9 @@ def handle_crossed_operator(operator_string):
 
 def format_action_string(action_string: str, indicator_aliases: list, indicator_run_results: dict):
     '''Converts user-friendly action string to one that can be evaluated by eval()'''
+
+    action_string = action_string.replace('and', '&').replace('or', '|').replace('not', '~')
+
     fixed_action_string_words = []
 
     for word in action_string.split():
@@ -68,13 +71,26 @@ def format_action_string(action_string: str, indicator_aliases: list, indicator_
 
         word = word.replace('(', '').replace(')', '')
 
+        process, process_len = None, None
+        if '#' in word:
+            word, whole_process = word.split('#')
+
+            if '.' not in whole_process:
+                raise ValueError('process not valid, validation at model level failed')
+
+            process, process_len = whole_process.split('.')
+
         if word in indicator_run_results:
             fixed_word = f'indicator_run_results["{word}"]'
+            if process and process_len:
+                fixed_word = f'np.array(pd.Series({fixed_word}).{process}({process_len}))'
 
         elif word in indicator_aliases and '.' not in word:  # then this must intend to reference the default value
             for key in indicator_run_results:
                 if word in key:
                     fixed_word = f'indicator_run_results["{key}"]'
+                    if process and process_len:
+                        fixed_word = f'np.array(pd.Series({fixed_word}).{process}({process_len}))'
                     break
         else:
             fixed_word = word
@@ -286,7 +302,7 @@ def run_study(bt_request: BtRequest) -> StandardResult | CvResult:
 
         best_trial_pf_visuals_html = get_html_pf_plot(final_test_actual_pf, final_test_actual_strat_run)
         if __debug__:
-            Path('temp').mkdir(exist_ok=True)  # todo There is a close line operating on daily timeframe for some reason when the rest of the data is the 4h / fastest, try empty strat runs to see where its comign from
+            Path('temp').mkdir(exist_ok=True)
             with open(f'temp/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}_pf_visuals.html', 'wb') as f:
                 f.write(best_trial_pf_visuals_html.encode('utf-8'))
 
@@ -345,9 +361,12 @@ def get_pf_and_strat_runs(timeframed_data, bt_request, **kwargs):
                 key_val = f'{indicator_alias}.{run_value}'
                 indicator_run_results[key_val] = run_result['shaped_run_result']
                 if bt_request.get_visuals_html:
+                    entry_string_primary_words = [word.split('.')[0] for word in entry_string.split()]
+                    exit_string_primary_words = [word.split('.')[0] for word in exit_string.split()]
+
                     add_conditions = [
-                        indicator_alias in entry_string,
-                        indicator_alias in exit_string,
+                        indicator_alias in entry_string_primary_words,
+                        indicator_alias in exit_string_primary_words,
                     ]
                     if any(add_conditions) and indicator_alias not in indicator_aliases_added:
                         indicator_strat_runs[key_val] = get_strat_run(indicator_alias=indicator_alias,
@@ -365,13 +384,19 @@ def get_pf_and_strat_runs(timeframed_data, bt_request, **kwargs):
     exit_string = format_action_string(exit_string, indicator_aliases=live_run_aliases,
                                        indicator_run_results=indicator_run_results)
 
+    fastest_timeframed_data, fastest_timeframe = get_fastest_timeframe_data(timeframed_data)
+
+    open = fastest_timeframed_data.open.to_numpy().reshape(len(fastest_timeframed_data.close))
+    high = fastest_timeframed_data.high.to_numpy().reshape(len(fastest_timeframed_data.high))
+    low = fastest_timeframed_data.low.to_numpy().reshape(len(fastest_timeframed_data.low))
+    close = fastest_timeframed_data.close.to_numpy().reshape(len(fastest_timeframed_data.close))
+    volume = fastest_timeframed_data.volume.to_numpy().reshape(len(fastest_timeframed_data.volume))
+
     entry_string = handle_crossed_operator(entry_string)
     exit_string = handle_crossed_operator(exit_string)
 
     entries = np.where(eval(entry_string), True, False)
     exits = np.where(eval(exit_string), True, False)
-
-    fastest_timeframed_data, fastest_timeframe = get_fastest_timeframe_data(timeframed_data)
 
     pf = vbt.Portfolio.from_signals(fastest_timeframed_data, entries=entries, exits=exits,
                                     freq=fastest_timeframe)

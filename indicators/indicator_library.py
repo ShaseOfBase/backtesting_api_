@@ -120,6 +120,7 @@ def get_indicator_run_results(fastest_timeframe_data, fastest_timeframe,
                                                            run_kwargs=run_kwargs)
     if not indicator_run_object:
         indicator_run_object = vbt_indicator.run(**data_run_kwargs, **run_kwargs)
+
         cache_indicator_run_result(run_result=indicator_run_object,
                                    data_instance=timeframe_data,
                                    indicator=rest_indicator.indicator,
@@ -131,9 +132,8 @@ def get_indicator_run_results(fastest_timeframe_data, fastest_timeframe,
     for run_value in avlbl_values:
         pandas_timeframe = convert_std_timeframe_to_pandas_timeframe(fastest_timeframe)
         shaped_run_result = eval(f'indicator_run_object.{run_value}').resample(pandas_timeframe).asfreq().ffill()
-        shaped_run_result = reshape_slow_timeframe_data_to_fast(
-            slow_timeframe_data=shaped_run_result,
-            fastest_timeframe_index=fastest_timeframe_data.index)
+        shaped_run_result = reshape_slow_timeframe_data_to_fast(slow_timeframe_data=shaped_run_result,
+                                                                fastest_timeframe_index=fastest_timeframe_data.index)
 
         if rest_indicator.normalize:
             shaped_run_result = shaped_run_result / fastest_timeframe_data.close
