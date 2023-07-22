@@ -16,7 +16,6 @@ async def say_hello(bt_request: BtRequest):
     try:
         processed_result = run_study(bt_request)
         # todo rather return all training and test HTML pages for each train/split block
-        # todo why is signal none/none/none
         print(1)
 
         return {"message": f"Hello world"}

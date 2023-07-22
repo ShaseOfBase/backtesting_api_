@@ -16,11 +16,7 @@ def get_signal_dict_from_pf(pf: vbt.Portfolio, get_signal) -> dict:
                 'datetime': signal_order['Signal Index']
             }
 
-    return {
-        'value': None,
-        'price': None,
-        'datetime': None
-    }
+    return {}
 
 
 def get_standard_result_from_study(study, bt_request: BtRequest) -> StandardResult:
