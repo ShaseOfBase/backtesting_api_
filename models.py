@@ -222,7 +222,7 @@ class CvResult:
     cv_df: pd.DataFrame
     final_test_best_pf: vbt.Portfolio
     final_test_actual_pf: pd.DataFrame
-    final_test_visuals_html: str
+    html_visuals: str
     signal: Optional[dict] = None
 
 

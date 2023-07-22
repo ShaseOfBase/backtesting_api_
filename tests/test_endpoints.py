@@ -38,8 +38,9 @@ def test_bt_request():
                                               diff_diffs=[1, 3]),
                            entries='(fast_macd.hist#diff.diff_diffs >= macd_hist_long) and (close > slow_ma)',
                            exits='(fast_macd.hist < 0) or (close < slow_ma)',
-                           n_trials=50,
+                           n_trials=15,
                            get_visuals_html=True,
+                           get_signal=True,
                            cross_validate='sss')
 
     response = client.post("/bt", data=bt_request.to_json())

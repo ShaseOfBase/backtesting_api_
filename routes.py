@@ -13,10 +13,16 @@ async def root():
 
 @app.post("/bt")
 async def say_hello(bt_request: BtRequest):
-    processed_result = run_study(bt_request)
-    print(1)
+    try:
+        processed_result = run_study(bt_request)
+        # todo rather return all training and test HTML pages for each train/split block
+        # todo why is signal none/none/none
+        print(1)
 
-    return {"message": f"Hello world"}
+        return {"message": f"Hello world"}
+    except Exception as e:
+        print(e)
+        return {"message": f"Error: {e}"}
 
 
 @app.post("/indicators")

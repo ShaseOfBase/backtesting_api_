@@ -1,3 +1,4 @@
+import gc
 from datetime import datetime
 from math import isnan
 from collections import defaultdict
@@ -196,121 +197,172 @@ def get_direction_from_objective_value(objective_value):
         raise ValueError(f'Objective value {objective_value} not recognized')  # todo <- add all pf.stats values here
 
 
+def get_html_visuals(train_results_pfs, train_results_strat_runs, actual_test_result_pfs, actual_test_result_strat_runs,
+                     best_test_result_pfs, best_test_result_strat_runs):
+    ...
+    # best_trial_pf_visuals_html = get_html_pf_plot(final_test_actual_pf, final_test_actual_strat_run)
+
+
 def run_study(bt_request: BtRequest) -> StandardResult | CvResult:
-    timeframed_data = fetch_datas(source=bt_request.source,
-                                  symbol=bt_request.symbol,
-                                  timeframes=[indicator.timeframe for indicator in bt_request.indicators],
-                                  testing_period=bt_request.testing_period)
+    try:
+        timeframed_data = fetch_datas(source=bt_request.source,
+                                      symbol=bt_request.symbol,
+                                      timeframes=[indicator.timeframe for indicator in bt_request.indicators],
+                                      testing_period=bt_request.testing_period)
 
-    renamed_indicators = {}
+        renamed_indicators = {}
 
-    for rest_indicator in bt_request.indicators:
-        if not rest_indicator.run_kwargs:
-            continue
-        for key, value in rest_indicator.run_kwargs.items():
-            renamed_indicators[f'{rest_indicator.alias}__{key}'] = value
+        for rest_indicator in bt_request.indicators:
+            if not rest_indicator.run_kwargs:
+                continue
+            for key, value in rest_indicator.run_kwargs.items():
+                renamed_indicators[f'{rest_indicator.alias}__{key}'] = value
 
-    kwargs_to_add = [renamed_indicators]
-    kwargs_to_add.append(bt_request.custom_ranges)
+        kwargs_to_add = [renamed_indicators]
+        kwargs_to_add.append(bt_request.custom_ranges)
 
-    def std_objective(trial, action_data):
-        run_kwargs = get_trial_kwargs(trial=trial, kwargs_to_add=kwargs_to_add, bt_request=bt_request)
+        def std_objective(trial, action_data):
+            run_kwargs = get_trial_kwargs(trial=trial, kwargs_to_add=kwargs_to_add, bt_request=bt_request)
 
-        pf, strat_runs = get_pf_and_strat_runs(action_data, bt_request=bt_request, **run_kwargs)
-        trial.set_user_attr('pf', pf)
-        trial.set_user_attr('strat_runs', strat_runs)
+            pf, strat_runs = get_pf_and_strat_runs(action_data, bt_request=bt_request, **run_kwargs)
+            trial.set_user_attr('pf', pf)
+            trial.set_user_attr('strat_runs', strat_runs)
 
-        if isnan(pf.sharpe_ratio.iloc[0]):
-            return -100000
+            if isnan(pf.sharpe_ratio.iloc[0]):
+                return -100000
 
-        if bt_request.objective_value == 'sharpe_ratio':
-            return pf.sharpe_ratio.values[0]
-        elif bt_request.objective_value == 'total_return':
-            return pf.total_return.values[0]
+            if bt_request.objective_value == 'sharpe_ratio':
+                return pf.sharpe_ratio.values[0]
+            elif bt_request.objective_value == 'total_return':
+                return pf.total_return.values[0]
+            else:
+                raise ValueError(f'Invalid objective value: {bt_request.objective_value}')
+
+        study_direction = get_direction_from_objective_value(bt_request.objective_value)
+
+        if not bt_request.cross_validate:
+            # region run standard study
+            study_name = 'cool_study12'
+            study = optuna.create_study(study_name=study_name, direction=study_direction)
+            # storage = "sqlite:///{}.db".format(study_name)
+            study.optimize(lambda trial: std_objective(trial, action_data=timeframed_data),
+                           n_trials=bt_request.n_trials)
+            return get_standard_result_from_study(study=study, bt_request=bt_request)
+            # endregion
+
         else:
-            raise ValueError(f'Invalid objective value: {bt_request.objective_value}')
-
-    study_direction = get_direction_from_objective_value(bt_request.objective_value)
-
-    if not bt_request.cross_validate:
-        study_name = 'cool_study12'
-        study = optuna.create_study(study_name=study_name, direction=study_direction)
-        # storage = "sqlite:///{}.db".format(study_name)
-        study.optimize(lambda trial: std_objective(trial, action_data=timeframed_data), n_trials=bt_request.n_trials)
-        return get_standard_result_from_study(study=study, bt_request=bt_request)
-
-    else:
-        timeframed_splitters = {}
-        for timeframe, timeframe_data in timeframed_data.items():
-            timeframed_splitters[timeframe] = get_default_splitter(timeframe_data.index)
-        # Apply splitter to data
-
-        train_studies = []
-        test_studies = []
-
-        cv_results = []
-        actual_test_result_pfs = []
-        actual_test_result_strat_runs = []
-
-        for i in range(len(timeframed_splitters) + 1):
-            train_data = {}
-            test_data = {}
+            # region Run cross validated study
+            timeframed_splitters = {}
             for timeframe, timeframe_data in timeframed_data.items():
-                timeframed_train_slice = timeframed_splitters[timeframe].splits['train'].iloc[i]
-                timeframed_test_slice = timeframed_splitters[timeframe].splits['test'].iloc[i]
+                timeframed_splitters[timeframe] = get_default_splitter(timeframe_data.index)
+            # Apply splitter to data
 
-                train_data[timeframe] = timeframe_data[timeframed_train_slice]
-                test_data[timeframe] = timeframe_data[timeframed_test_slice]
+            train_studies = []
+            test_studies = []
 
-            train_study = optuna.create_study(direction=study_direction)
-            train_study.optimize(lambda trial: std_objective(trial, action_data=train_data),
-                                 n_trials=bt_request.n_trials)
-            train_studies.append(train_study)
+            cv_df_results = []
 
-            test_study = optuna.create_study(direction=study_direction)
-            test_study.optimize(lambda trial: std_objective(trial, action_data=test_data),
-                                n_trials=bt_request.n_trials)
-            test_studies.append(test_study)
+            train_results_pfs = []
+            train_results_strat_runs = []
 
-            actual_test_result_pf, strat_runs = get_pf_and_strat_runs(test_data,
-                                                                      bt_request=bt_request,
-                                                                      **train_study.best_params)
-            actual_pf_objective_value = get_pf_objective_value(actual_test_result_pf, bt_request.objective_value)
+            actual_test_result_pfs = []
+            actual_test_result_strat_runs = []
 
-            actual_test_result_pfs.append(actual_test_result_pf)
-            actual_test_result_strat_runs.append(strat_runs)
+            best_test_result_pfs = []
+            best_test_result_strat_runs = []
 
-            actual_value_equals_best_train_value = actual_pf_objective_value == test_study.best_value
+            for i in range(len(timeframed_splitters) + 1):
+                train_data = {}
+                test_data = {}
+                for timeframe, timeframe_data in timeframed_data.items():
+                    timeframed_train_slice = timeframed_splitters[timeframe].splits['train'].iloc[i]
+                    timeframed_test_slice = timeframed_splitters[timeframe].splits['test'].iloc[i]
 
-            cv_results.append({
-                'train_best': train_study.best_value,
-                'test_actual': actual_pf_objective_value,
-                'train_best_params': train_study.best_params,
-                'test_best': test_study.best_value,
-                'test_best_params': test_study.best_params if not actual_value_equals_best_train_value
-                else train_study.best_params,
-            })
+                    train_data[timeframe] = timeframe_data[timeframed_train_slice]
+                    test_data[timeframe] = timeframe_data[timeframed_test_slice]
 
-        cv_df = pd.DataFrame(cv_results)
+                train_study = optuna.create_study(direction=study_direction)
+                train_study.optimize(lambda trial: std_objective(trial, action_data=train_data),
+                                     n_trials=bt_request.n_trials)
+                train_studies.append(train_study)
 
-        final_test_actual_pf = actual_test_result_pfs[-1]
-        final_test_actual_strat_run = actual_test_result_strat_runs[-1]
+                test_study = optuna.create_study(direction=study_direction)
+                test_study.optimize(lambda trial: std_objective(trial, action_data=test_data),
+                                    n_trials=bt_request.n_trials)
+                test_studies.append(test_study)
 
-        signal_dict = get_signal_dict_from_pf(final_test_actual_pf, bt_request.get_signal)
+                actual_test_result_pf, actual_test_strat_runs = get_pf_and_strat_runs(test_data,
+                                                                                      bt_request=bt_request,
+                                                                                      **train_study.best_params)
+                actual_pf_objective_value = get_pf_objective_value(actual_test_result_pf, bt_request.objective_value)
 
-        clear_indicator_run_cache()
+                actual_test_result_pfs.append(actual_test_result_pf)
+                actual_test_result_strat_runs.append(actual_test_strat_runs)
 
-        best_trial_pf_visuals_html = get_html_pf_plot(final_test_actual_pf, final_test_actual_strat_run)
-        if __debug__:
-            Path('temp').mkdir(exist_ok=True)
-            with open(f'temp/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}_pf_visuals.html', 'wb') as f:
-                f.write(best_trial_pf_visuals_html.encode('utf-8'))
+                train_best_results_pf, train_best_results_strat_runs = get_pf_and_strat_runs(train_data,
+                                                                                             bt_request=bt_request,
+                                                                                             **train_study.best_params)
 
-        return CvResult(cv_df=cv_df,
-                        final_test_best_pf=test_studies[-1].best_trial.user_attrs['pf'],
-                        final_test_actual_pf=final_test_actual_pf,
-                        final_test_visuals_html=get_html_pf_plot(final_test_actual_pf, final_test_actual_strat_run),
-                        signal=signal_dict)
+                train_results_pfs.append(train_best_results_pf)
+                train_results_strat_runs.append(train_best_results_strat_runs)
+
+                best_test_results_pf, best_test_results_strat_runs = get_pf_and_strat_runs(test_data,
+                                                                                           bt_request=bt_request,
+                                                                                           **test_study.best_params)
+
+                best_test_result_pfs.append(best_test_results_pf)
+                best_test_result_strat_runs.append(best_test_results_strat_runs)
+
+                actual_value_equals_best_train_value = actual_pf_objective_value == test_study.best_value
+
+                fastest_timeframe_data, _ = get_fastest_timeframe_data(timeframed_data)
+
+                train_holding = train_data[list(train_data)[0]].run('from_holding', freq=list(timeframed_data)[0])
+                test_holding = test_data[list(test_data)[0]].run('from_holding', freq=list(timeframed_data)[0])
+
+                cv_df_results.append({
+                    'train_best': train_study.best_value,
+                    'test_actual': actual_pf_objective_value,
+                    'train_best_params': train_study.best_params,
+                    'test_best': test_study.best_value,
+                    'test_best_params': test_study.best_params if not actual_value_equals_best_train_value else train_study.best_params,
+                    'train_holding': get_pf_objective_value(pf=train_holding,
+                                                            objective_value=bt_request.objective_value),
+                    'test_holding': get_pf_objective_value(pf=test_holding,
+                                                           objective_value=bt_request.objective_value),
+
+                })
+
+                vbt.clear_cache()
+                gc.collect()
+
+            cv_df = pd.DataFrame(cv_df_results)
+
+            html_visuals = get_html_visuals(train_results_pfs, train_results_strat_runs,
+                                            actual_test_result_pfs, actual_test_result_strat_runs,
+                                            best_test_result_pfs, best_test_result_strat_runs, )
+
+            final_test_actual_pf = actual_test_result_pfs[-1]
+            final_test_actual_strat_run = actual_test_result_strat_runs[-1]
+
+            signal_dict = get_signal_dict_from_pf(final_test_actual_pf, bt_request.get_signal)
+
+            clear_indicator_run_cache()
+
+            best_trial_pf_visuals_html = get_html_pf_plot(final_test_actual_pf, final_test_actual_strat_run)
+            if __debug__:
+                Path('temp').mkdir(exist_ok=True)
+                with open(f'temp/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}_pf_visuals.html', 'wb') as f:
+                    f.write(best_trial_pf_visuals_html.encode('utf-8'))
+
+            return CvResult(cv_df=cv_df,
+                            final_test_best_pf=test_studies[-1].best_trial.user_attrs['pf'],
+                            final_test_actual_pf=final_test_actual_pf,
+                            html_visuals=best_trial_pf_visuals_html,
+                            signal=signal_dict)
+            # endregion
+    except Exception as e:
+        raise e
 
 
 def get_indicator_from_alias(alias: str, rest_indicators):
