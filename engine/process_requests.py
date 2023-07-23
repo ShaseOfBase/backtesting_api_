@@ -197,10 +197,19 @@ def get_direction_from_objective_value(objective_value):
         raise ValueError(f'Objective value {objective_value} not recognized')  # todo <- add all pf.stats values here
 
 
-def get_html_visuals(train_results_pfs, train_results_strat_runs, actual_test_result_pfs, actual_test_result_strat_runs,
+def get_html_visuals(train_results_pfs, train_results_strat_runs, final_test_actual_pf, final_test_actual_strat_run,
                      best_test_result_pfs, best_test_result_strat_runs):
-    ...
-    # best_trial_pf_visuals_html = get_html_pf_plot(final_test_actual_pf, final_test_actual_strat_run)
+
+    html_visuals = {}
+    for i, pf in train_results_pfs.items():
+        html_visuals[f'train_split_{i}'] = get_html_pf_plot(pf, train_results_strat_runs[i])
+
+    html_visuals['final_test'] = get_html_pf_plot(final_test_actual_pf, final_test_actual_strat_run)
+
+    for i, pf in best_test_result_pfs.items():
+        html_visuals[f'best_test_split_{i}'] = get_html_pf_plot(pf, best_test_result_strat_runs[i])
+
+    return html_visuals
 
 
 def run_study(bt_request: BtRequest) -> StandardResult | CvResult:
@@ -262,14 +271,14 @@ def run_study(bt_request: BtRequest) -> StandardResult | CvResult:
 
             cv_df_results = []
 
-            train_results_pfs = []
-            train_results_strat_runs = []
+            train_results_pfs = {}
+            train_results_strat_runs = {}
 
             actual_test_result_pfs = []
             actual_test_result_strat_runs = []
 
-            best_test_result_pfs = []
-            best_test_result_strat_runs = []
+            best_test_result_pfs = {}
+            best_test_result_strat_runs = {}
 
             for i in range(len(timeframed_splitters) + 1):
                 train_data = {}
@@ -291,6 +300,13 @@ def run_study(bt_request: BtRequest) -> StandardResult | CvResult:
                                     n_trials=bt_request.n_trials)
                 test_studies.append(test_study)
 
+                train_best_results_pf, train_best_results_strat_runs = get_pf_and_strat_runs(train_data,
+                                                                                             bt_request=bt_request,
+                                                                                             **train_study.best_params)
+
+                train_results_pfs[i] = train_best_results_pf
+                train_results_strat_runs[i] = train_best_results_strat_runs
+
                 actual_test_result_pf, actual_test_strat_runs = get_pf_and_strat_runs(test_data,
                                                                                       bt_request=bt_request,
                                                                                       **train_study.best_params)
@@ -299,19 +315,12 @@ def run_study(bt_request: BtRequest) -> StandardResult | CvResult:
                 actual_test_result_pfs.append(actual_test_result_pf)
                 actual_test_result_strat_runs.append(actual_test_strat_runs)
 
-                train_best_results_pf, train_best_results_strat_runs = get_pf_and_strat_runs(train_data,
-                                                                                             bt_request=bt_request,
-                                                                                             **train_study.best_params)
-
-                train_results_pfs.append(train_best_results_pf)
-                train_results_strat_runs.append(train_best_results_strat_runs)
-
                 best_test_results_pf, best_test_results_strat_runs = get_pf_and_strat_runs(test_data,
                                                                                            bt_request=bt_request,
                                                                                            **test_study.best_params)
 
-                best_test_result_pfs.append(best_test_results_pf)
-                best_test_result_strat_runs.append(best_test_results_strat_runs)
+                best_test_result_pfs[i] = best_test_results_pf
+                best_test_result_strat_runs[i] = best_test_results_strat_runs
 
                 actual_value_equals_best_train_value = actual_pf_objective_value == test_study.best_value
 
@@ -320,17 +329,20 @@ def run_study(bt_request: BtRequest) -> StandardResult | CvResult:
                 train_holding = train_data[list(train_data)[0]].run('from_holding', freq=list(timeframed_data)[0])
                 test_holding = test_data[list(test_data)[0]].run('from_holding', freq=list(timeframed_data)[0])
 
+                rounded_train_study_best_params = {k: round(v, 5) for k, v in train_study.best_params.items()}
+                rounded_test_study_best_params = {k: round(v, 5) for k, v in test_study.best_params.items()}
+
                 cv_df_results.append({
                     'train_best': train_study.best_value,
                     'test_actual': actual_pf_objective_value,
-                    'train_best_params': train_study.best_params,
                     'test_best': test_study.best_value,
-                    'test_best_params': test_study.best_params if not actual_value_equals_best_train_value else train_study.best_params,
                     'train_holding': get_pf_objective_value(pf=train_holding,
                                                             objective_value=bt_request.objective_value),
                     'test_holding': get_pf_objective_value(pf=test_holding,
                                                            objective_value=bt_request.objective_value),
-
+                    'train_best_params': rounded_train_study_best_params,
+                    'test_best_params': rounded_test_study_best_params if not actual_value_equals_best_train_value
+                    else rounded_train_study_best_params
                 })
 
                 vbt.clear_cache()
@@ -338,12 +350,12 @@ def run_study(bt_request: BtRequest) -> StandardResult | CvResult:
 
             cv_df = pd.DataFrame(cv_df_results)
 
-            html_visuals = get_html_visuals(train_results_pfs, train_results_strat_runs,
-                                            actual_test_result_pfs, actual_test_result_strat_runs,
-                                            best_test_result_pfs, best_test_result_strat_runs, )
-
             final_test_actual_pf = actual_test_result_pfs[-1]
             final_test_actual_strat_run = actual_test_result_strat_runs[-1]
+
+            html_visuals = get_html_visuals(train_results_pfs, train_results_strat_runs,
+                                            final_test_actual_pf, final_test_actual_strat_run,
+                                            best_test_result_pfs, best_test_result_strat_runs, )
 
             signal_dict = get_signal_dict_from_pf(final_test_actual_pf, bt_request.get_signal)
 
@@ -358,7 +370,7 @@ def run_study(bt_request: BtRequest) -> StandardResult | CvResult:
             return CvResult(cv_df=cv_df,
                             final_test_best_pf=test_studies[-1].best_trial.user_attrs['pf'],
                             final_test_actual_pf=final_test_actual_pf,
-                            html_visuals=best_trial_pf_visuals_html,
+                            html_visuals=html_visuals,
                             signal=signal_dict)
             # endregion
     except Exception as e:
@@ -413,8 +425,10 @@ def get_pf_and_strat_runs(timeframed_data, bt_request, **kwargs):
                 key_val = f'{indicator_alias}.{run_value}'
                 indicator_run_results[key_val] = run_result['shaped_run_result']
                 if bt_request.get_visuals_html:
-                    entry_string_primary_words = [word.split('.')[0] for word in entry_string.split()]
-                    exit_string_primary_words = [word.split('.')[0] for word in exit_string.split()]
+                    comparable_entry_string = entry_string.replace('(', '').replace(')', '')
+                    comparable_exit_string = exit_string.replace('(', '').replace(')', '')
+                    entry_string_primary_words = [word.split('.')[0] for word in comparable_entry_string.split()]
+                    exit_string_primary_words = [word.split('.')[0] for word in comparable_exit_string.split()]
 
                     add_conditions = [
                         indicator_alias in entry_string_primary_words,
