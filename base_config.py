@@ -24,7 +24,7 @@ class SubConfig:
 
 class BaseConfig:
     max_param_combinations = 1000
-    max_entry_exit_len = 50
+    max_trigger_len = 300
     max_periods_in_testing_period = 1000
     max_indicators = 10
     data_batch_len = 200

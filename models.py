@@ -94,13 +94,51 @@ class RestIndicator(json.JSONEncoder):
 
 
 @dataclass
+class TriggerPair(json.JSONEncoder):
+    alias: str
+    entry: str
+    exit: str
+
+    def __post_init__(self):
+        self.validate()
+
+    def validate(self):
+        for trigger in [self.entry, self.exit]:
+            if '#' in trigger:
+                for word in trigger.split():
+                    if '#' not in word:
+                        continue
+                    split_word = word.split('#')
+
+                    if '.' not in split_word[1]:
+                        raise ValueError('Process must be in the format of indicator_alias<.indicator_specifier>'
+                                         '#process.process_len (e.g. my_macd.hist#diff.2)')
+                    process = split_word[1].split('.')[0]
+                    if process not in ['diff', 'mean', 'median']:
+                        raise ValueError(f'Process {process} not valid, expecting diff, mean or median')
+
+            if len(trigger) > BaseConfig.max_trigger_len:
+                raise ValueError(f'Entry or exit conditions exceed max length of {BaseConfig.max_trigger_len}')
+
+            for bad_operator in bad_operators:
+                if bad_operator in trigger or bad_operator in trigger:
+                    raise ValueError(f'Invalid operator {bad_operator} in entry or exit conditions')
+
+        if len(self.alias) > 30:
+            raise ValueError(f'Alias {self.alias} must be at most 30 characters')
+
+    @classmethod
+    def from_dict(self, d):
+        return TriggerPair(**d)
+
+
+@dataclass
 class BtRequest(json.JSONEncoder):
     symbol: str
     testing_period: TestingPeriod | dict
     indicators: List[RestIndicator] | List[dict]
     custom_ranges: Optional[dict]
-    entries: str
-    exits: str
+    trigger_pairs: List[TriggerPair] | List[dict]
     sl_stop: Optional[float] = 0.0
     tp_stop: Optional[float] = 0.0
     tsl_stop: Optional[float] = 0.0
@@ -115,39 +153,15 @@ class BtRequest(json.JSONEncoder):
     direction: str = 'long' # 'short | long | both'
     get_signal: bool = False
 
-    def is_valid(self):
-        if '#' in self.entries:
-            for word in self.entries.split():
-                if '#' not in word:
-                    continue
-                split_word = word.split('#')
-
-                if '.' not in split_word[1]:
-                    raise ValueError('Process must be in the format of indicator_alias<.indicator_specifier>'
-                                     '#process.process_len (e.g. my_macd.hist#diff.2)')
-                process = split_word[1].split('.')[0]
-                if process not in ['diff', 'mean', 'median']:
-                    raise ValueError(f'Process {process} not valid, expecting diff, mean or median')
-
-        if self.source not in valid_sources:
-            raise ValueError(f'Invalid source {self.source}, must be one of {valid_sources}')
-
-        if not self.entries:
-            raise ValueError('At least one entry condition must be specified')
-
-        if not self.exits:
-            raise ValueError('At least one exit condition must be specified')
-
-        if len(self.indicators) > BaseConfig.max_indicators:
-            raise ValueError(f'Too many indicators, max {BaseConfig.max_indicators}')
-
-        for key, value in self.custom_ranges.items():
-            if len(value) not in [2, 3]:
-                raise ValueError(f'Custom range {key} must have 2 or 3 values')
-
-
     def __repr__(self):
         return f'BtRequest: {self.__dict__}'
+
+    # todo <- create jsonify and de-jsonify methods
+
+    def __post_init__(self):
+        self.trigger_pairs = [TriggerPair.from_dict(trigger_pair) for trigger_pair in self.trigger_pairs]
+        self.validate()
+        print(1)
 
     def to_json(self):
         indicator_dicts = []
@@ -157,34 +171,37 @@ class BtRequest(json.JSONEncoder):
         self.indicators = indicator_dicts
         self.testing_period = self.testing_period.__dict__
 
+        self.trigger_pairs = [trigger_pair.__dict__ for trigger_pair in self.trigger_pairs]
+
         result = json.dumps(self.__dict__)
         return result
 
     def validate(self):
-        if not self.entries or not self.exits:
-            raise ValueError('At least one entry and one exit condition must be specified')
+        trigger_aliases = set()
+        for trigger in self.trigger_pairs:
+            if trigger.alias in trigger_aliases:
+                raise ValueError(f'Trigger alias "{trigger.alias}" must be unique')
+            trigger.validate()
+            trigger_aliases.add(trigger.alias)
+
+        if self.source not in valid_sources:
+            raise ValueError(f'Invalid source {self.source}, must be one of {valid_sources}')
+
+        if not self.trigger_pairs:
+            raise ValueError('At least one set of triggers with an entry and exit must be specified')
+
+        if len(self.indicators) > BaseConfig.max_indicators:
+            raise ValueError(f'Too many indicators, max {BaseConfig.max_indicators}')
+
+        for key, value in self.custom_ranges.items():
+            if len(value) not in [2, 3]:
+                raise ValueError(f'Custom range {key} must have 2 or 3 values')
 
         known_indicator_aliases = set()
         for indicator in self.indicators:
-            if indicator['alias'] in bad_aliases:
-                raise ValueError(f'Invalid alias {indicator["alias"]} in indicators')
-            known_indicator_aliases.add(indicator['alias'])
-
-        if len(self.entries) > BaseConfig.max_entry_exit_len or len(self.exits) > BaseConfig.max_entry_exit_len:
-            raise ValueError(f'Entry or exit conditions exceed max length of {BaseConfig.max_entry_exit_len}')
-
-        for bad_operator in bad_operators:
-            if bad_operator in self.entries or bad_operator in self.exits:
-                raise ValueError(f'Invalid operator {bad_operator} in entry or exit conditions')
-
-        for word in (self.entries + self.exits).split(' '):
-            if word in known_indicator_aliases:
-                raise ValueError(f'Invalid alias {word} in entry or exit conditions')
-            if word in arithmetic_operators or word in comparison_operators or word in flow_operators or \
-                    word.isnumeric() or word in indicator_library:
-                continue
-            else:
-                raise ValueError(f'Invalid word {word} in entry or exit conditions')
+            if indicator.alias in bad_aliases:
+                raise ValueError(f'Invalid alias {indicator.alias} in indicators')
+            known_indicator_aliases.add(indicator.alias)
 
         for timeframe in {indicator.timeframe for indicator in self.indicators}:
             periods_in_testing_period = get_periods_in_testing_period(testing_period=self.testing_period,

@@ -406,50 +406,6 @@ def get_strat_run(indicator_alias, run_value, shaped_run_result: np.array, indic
 
 
 def get_pf_and_strat_runs(timeframed_data, bt_request, **kwargs):
-    live_run_indicators = get_live_run_indicators(bt_request, kwargs)
-    live_run_aliases = [indicator.alias for indicator in live_run_indicators]
-    timeframed_run_results = get_timeframed_run_results(timeframed_data, live_run_indicators)
-
-    entry_string = bt_request.entries
-    exit_string = bt_request.exits
-    for key, value in kwargs.items():
-        entry_string = entry_string.replace(key, str(value))
-        exit_string = exit_string.replace(key, str(value))
-
-    indicator_run_results = {}
-    indicator_strat_runs = {}
-    indicator_aliases_added = set()
-    for timeframe, indicator_results in timeframed_run_results.items():
-        for indicator_alias, run_results in indicator_results.items():
-            for run_value, run_result in run_results.items():
-                key_val = f'{indicator_alias}.{run_value}'
-                indicator_run_results[key_val] = run_result['shaped_run_result']
-                if bt_request.get_visuals_html:
-                    comparable_entry_string = entry_string.replace('(', '').replace(')', '')
-                    comparable_exit_string = exit_string.replace('(', '').replace(')', '')
-                    entry_string_primary_words = [word.split('.')[0] for word in comparable_entry_string.split()]
-                    exit_string_primary_words = [word.split('.')[0] for word in comparable_exit_string.split()]
-
-                    add_conditions = [
-                        indicator_alias in entry_string_primary_words,
-                        indicator_alias in exit_string_primary_words,
-                    ]
-                    if any(add_conditions) and indicator_alias not in indicator_aliases_added:
-                        indicator_strat_runs[key_val] = get_strat_run(indicator_alias=indicator_alias,
-                                                                      indicator_run_object=run_result[
-                                                                          'indicator_run_object'],
-                                                                      run_value=run_value,
-                                                                      data=timeframed_data[timeframe],
-                                                                      shaped_run_result=run_result['shaped_run_result'],
-                                                                      bt_request_indicators=bt_request.indicators)
-                        indicator_aliases_added.add(indicator_alias)
-
-    entry_string = format_action_string(entry_string, indicator_aliases=live_run_aliases,
-                                        indicator_run_results=indicator_run_results)
-
-    exit_string = format_action_string(exit_string, indicator_aliases=live_run_aliases,
-                                       indicator_run_results=indicator_run_results)
-
     fastest_timeframed_data, fastest_timeframe = get_fastest_timeframe_data(timeframed_data)
 
     open = fastest_timeframed_data.open.to_numpy().reshape(len(fastest_timeframed_data.close))
@@ -458,15 +414,60 @@ def get_pf_and_strat_runs(timeframed_data, bt_request, **kwargs):
     close = fastest_timeframed_data.close.to_numpy().reshape(len(fastest_timeframed_data.close))
     volume = fastest_timeframed_data.volume.to_numpy().reshape(len(fastest_timeframed_data.volume))
 
-    entry_string = handle_crossed_operator(entry_string)
-    exit_string = handle_crossed_operator(exit_string)
+    live_run_indicators = get_live_run_indicators(bt_request, kwargs)
+    live_run_aliases = [indicator.alias for indicator in live_run_indicators]
+    timeframed_run_results = get_timeframed_run_results(timeframed_data, live_run_indicators)
 
-    entries = np.where(eval(entry_string), True, False)
-    exits = np.where(eval(exit_string), True, False)
+    for trigger_pair in bt_request.trigger_pairs:
+        entry_string = trigger_pair.entry
+        exit_string = trigger_pair.exit
+        for key, value in kwargs.items():
+            entry_string = entry_string.replace(key, str(value))
+            exit_string = exit_string.replace(key, str(value))
 
-    pf = vbt.Portfolio.from_signals(fastest_timeframed_data, entries=entries, exits=exits,
-                                    freq=fastest_timeframe)
+        indicator_run_results = {}
+        indicator_strat_runs = {}
+        indicator_aliases_added = set()
+        for timeframe, indicator_results in timeframed_run_results.items():
+            for indicator_alias, run_results in indicator_results.items():
+                for run_value, run_result in run_results.items():
+                    key_val = f'{indicator_alias}.{run_value}'
+                    indicator_run_results[key_val] = run_result['shaped_run_result']
+                    if bt_request.get_visuals_html:
+                        comparable_entry_string = entry_string.replace('(', '').replace(')', '')
+                        comparable_exit_string = exit_string.replace('(', '').replace(')', '')
+                        entry_string_primary_words = [word.split('.')[0] for word in comparable_entry_string.split()]
+                        exit_string_primary_words = [word.split('.')[0] for word in comparable_exit_string.split()]
 
-    return pf, indicator_strat_runs
+                        add_conditions = [
+                            indicator_alias in entry_string_primary_words,
+                            indicator_alias in exit_string_primary_words,
+                        ]
+                        if any(add_conditions) and indicator_alias not in indicator_aliases_added:
+                            indicator_strat_runs[key_val] = get_strat_run(indicator_alias=indicator_alias,
+                                                                          indicator_run_object=run_result[
+                                                                              'indicator_run_object'],
+                                                                          run_value=run_value,
+                                                                          data=timeframed_data[timeframe],
+                                                                          shaped_run_result=run_result['shaped_run_result'],
+                                                                          bt_request_indicators=bt_request.indicators)
+                            indicator_aliases_added.add(indicator_alias)
 
-    # todo - delete stops that are 0 or negative from new pf run_kwargs - still to be built
+        entry_string = format_action_string(entry_string, indicator_aliases=live_run_aliases,
+                                            indicator_run_results=indicator_run_results)
+
+        exit_string = format_action_string(exit_string, indicator_aliases=live_run_aliases,
+                                           indicator_run_results=indicator_run_results)
+
+        entry_string = handle_crossed_operator(entry_string)
+        exit_string = handle_crossed_operator(exit_string)
+
+        entries = np.where(eval(entry_string), True, False)
+        exits = np.where(eval(exit_string), True, False)
+
+        pf = vbt.Portfolio.from_signals(fastest_timeframed_data, entries=entries, exits=exits,
+                                        freq=fastest_timeframe)
+
+        return pf, indicator_strat_runs
+
+        # todo - delete stops that are 0 or negative from new pf run_kwargs - still to be built
