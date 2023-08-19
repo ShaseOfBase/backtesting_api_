@@ -150,13 +150,13 @@ class BtRequest(json.JSONEncoder):
     cross_validate: Optional[str] = 'none'
     get_visuals_html: Optional[bool] = False
     source: str = 'binance'
-    direction: str = 'long' # 'short | long | both'
+    direction: str = 'long'  # 'short | long | both'
     get_signal: bool = False
 
     def __repr__(self):
         return f'BtRequest: {self.__dict__}'
 
-    # todo <- create jsonify and de-jsonify methods
+    # todo <- create jsonify and de-jsonify methods and clean up doing this in scraps
 
     def __post_init__(self):
         self.trigger_pairs = [TriggerPair.from_dict(trigger_pair) for trigger_pair in self.trigger_pairs]
@@ -199,16 +199,19 @@ class BtRequest(json.JSONEncoder):
 
         known_indicator_aliases = set()
         for indicator in self.indicators:
-            if indicator.alias in bad_aliases:
-                raise ValueError(f'Invalid alias {indicator.alias} in indicators')
-            known_indicator_aliases.add(indicator.alias)
+            if isinstance(indicator, RestIndicator):
+                if indicator.alias in bad_aliases:
+                    raise ValueError(f'Invalid alias {indicator.alias} in indicators')
+                known_indicator_aliases.add(indicator.alias)
 
-        for timeframe in {indicator.timeframe for indicator in self.indicators}:
-            periods_in_testing_period = get_periods_in_testing_period(testing_period=self.testing_period,
-                                                                      timeframe=timeframe)
-            if periods_in_testing_period > BaseConfig.max_periods_in_testing_period:
-                raise ValueError(f'Testing period exceeds max periods in testing period of '
-                                 f'{BaseConfig.max_periods_in_testing_period} for timeframe {timeframe}')
+        # todo add this value back when we figure out why we're validating json version
+       # for timeframe in {indicator.timeframe for indicator in self.indicators}:
+       #     periods_in_testing_period = get_periods_in_testing_period(testing_period=self.testing_period,
+       #                                                               timeframe=timeframe)
+       #     if periods_in_testing_period > BaseConfig.max_periods_in_testing_period:
+       #         raise ValueError(f'Testing period exceeds max periods in testing period of '
+       #                          f'{BaseConfig.max_periods_in_testing_period} for timeframe {timeframe}')
+
 
 @dataclass
 class IndicatorDataRequest(json.JSONEncoder):

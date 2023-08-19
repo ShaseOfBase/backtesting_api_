@@ -15,6 +15,7 @@ async def root():
 async def say_hello(bt_request: BtRequest):
     try:
         processed_result = run_study(bt_request)
+        final_test_stats = processed_result.final_test_best_pf.stats()
         # todo rather return all training and test HTML pages for each train/split block
         print(1)
 

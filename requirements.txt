@@ -10,7 +10,7 @@ ta
 technical
 cryptography
 python-binance
-requests~=2.28.1
+requests
 attrs
 dateparser
 dill

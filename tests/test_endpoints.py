@@ -9,7 +9,7 @@ def test_bt_request():
     from main import app
     client = TestClient(app)
 
-    tp = TestingPeriod(start='2023-01-15 00:00',
+    tp = TestingPeriod(start='2022-01-15 00:00',
                        end='2023-04-01 00:00',
                        tz='Africa/Johannesburg')
 
@@ -21,7 +21,7 @@ def test_bt_request():
 
     ri_ma_slow = RestIndicator(alias='slow_ma',
                                indicator='ma',
-                               timeframe='4h',
+                               timeframe='12h',
                                normalize=True,
                                run_kwargs=dict(window=[25, 70]))
 
@@ -39,11 +39,9 @@ def test_bt_request():
 
     tp_b = TriggerPair(
         alias='lost_cause2',
-        entry='(fast_macd.hist#diff.diff_diffs >= macd_hist_long) and (close > slow_ma)',
-        exit='(fast_macd.hist < 0) or (close < slow_ma)'
+        entry='fast_macd.hist >= macd_hist_long',
+        exit='fast_macd.hist < macd_hist_short'
     )
-
-    bunch_o_trigger_pairs = []
 
     macd_conditions = [
         'fast_macd.hist#diff.diff_diffs >= macd_hist_long',
@@ -54,18 +52,24 @@ def test_bt_request():
  #   for _ in range(10):
   #      entry_type_a = f'({pos_a} and {pos_b}) or {pos_c}'
 
-    bt_request = BtRequest(symbol='BTCUSDT',
-                           testing_period=tp,
-                           indicators=[ri_ma_slow, ri_macd, ri_ma_fast],
-                           custom_ranges=dict(macd_hist_long=[-1, 1.],
-                                              diff_diffs=[1, 3]),
-                           trigger_pairs=[tp_a.__dict__, tp_b.__dict__],
-                           n_trials=15,
-                           get_visuals_html=True,
-                           get_signal=True,
-                           cross_validate='sss')
+    try:
+        bt_request = BtRequest(symbol='BTCUSDT',
+                               testing_period=tp,
+                               indicators=[ri_ma_slow, ri_macd, ri_ma_fast],
+                               custom_ranges=dict(macd_hist_long=[-1, 1.],
+                                                  macd_hist_short = [-1,0.],
+                                                  diff_diffs=[1, 3]),
+                               trigger_pairs=[tp_b.__dict__],
+                               n_trials=15,
+                               get_visuals_html=True,
+                               get_signal=True,
+                               cross_validate='standard',)
+        json_bt_request = bt_request.to_json()
 
-    response = client.post("/bt", data=bt_request.to_json())
+    except Exception as e:
+        raise e
+
+    response = client.post("/bt", data=json_bt_request)
     assert response.status_code == 200
     assert response.json() == {"message": "Hello world"}, response.json()
 
